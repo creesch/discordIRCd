@@ -3,7 +3,7 @@
 require('./config.js');
 
 if (!configuration.DEBUG) {
-    console.log = function() {}
+    console.log = function() {};
 }
 
 
@@ -35,20 +35,20 @@ let lastPRIVMSG = '';
 //
 
 function isEmptyObj(obj) {
-    return (Object.keys(obj).length === 0 && obj.constructor === Object)
+    return (Object.keys(obj).length === 0 && obj.constructor === Object);
 }
 // Function that parses irc messages. 
 // Shamelessly stolen from node-irc https://github.com/aredridel/node-ircd
 function parseMessage(line) {
-    let message = {}
+    let message = {};
     let m = /(:[^ ]+ )?([A-Z0-9]+)(?: (.*))?/i.exec(line);
     if (!m) {
         message.error = 'Unable to parse message';
     } else {
         let i;
-        if (m[3] && (i = m[3].indexOf(':')) != -1) {
-            let rest = m[3].slice(i + 1)
-            message.params = m[3].slice(0, i - 1).split(' ')
+        if (m[3] && (i = m[3].indexOf(':')) !== -1) {
+            let rest = m[3].slice(i + 1);
+            message.params = m[3].slice(0, i - 1).split(' ');
             message.params.push(rest);
         } else {
             if (m[3]) {
@@ -109,7 +109,7 @@ function parseIRCLine(line, discordID, channel) {
         mentionFound.forEach(function(mention) {
             const userNickname = mention.replace(/@(.{1,}?)\s/, '$1');
 
-            const userID = channelObject[discordID][channel]['members'][userNickname]['id'];
+            const userID = channelObject[discordID][channel].members[userNickname].id;
             const replaceRegex = new RegExp(mention, 'g');
             if (userID) {
                 line = line.replace(replaceRegex, `<@!${userID}>`);
@@ -138,33 +138,33 @@ discordClient.login(configuration.discordToken);
 
 // Will log discord debug information.
 discordClient.on('debug', function(info) {
-    console.log('debug', info)
+    console.log('debug', info);
 });
 
 // When debugging we probably want to know about errors as well. 
 discordClient.on('error', function(info) {
-    console.log('error', info)
+    console.log('error', info);
 });
 
 // Emitted when the Client tries to reconnect after being disconnected.
 discordClient.on('reconnecting', function() {
-    console.log('reconnecting')
+    console.log('reconnecting');
 });
 
 // Emitted whenever the client websocket is disconnected.
 discordClient.on('disconnect', function(event) {
-    console.log('disconnected', event)
+    console.log('disconnected', event);
 });
 
 // Emitted for general warnings.
 discordClient.on('warn', function(info) {
-    console.log('disconnected', info)
+    console.log('disconnected', info);
 });
 
 // Discord is ready. 
 discordClient.on('ready', function() {
     // This is probably not needed, but since sometimes things are weird with discord.
-    discordClient.guilds.array().forEach(function(guild, index) {
+    discordClient.guilds.array().forEach(function(guild) {
         guild.fetchMembers();
         guild.sync();
     });
@@ -186,7 +186,7 @@ discordClient.on('ready', function() {
             channelObject[guildID][channelName] = {
                 id: channelID,
                 joined: false,
-                topic: channelTopic 
+                topic: channelTopic
             };
         }
     });
@@ -278,19 +278,19 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
 function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, newDiscordDisplayName) {
     // First we go over the channels. 
     let foundInChannels = false;
+    let memberId;
     for (var channel in channelObject[guildID]) {
         if (channelObject[guildID].hasOwnProperty(channel) && channelObject[guildID][channel].joined) {
 
             let channelDetails = channelObject[guildID][channel];
             let channelMembers = channelDetails.members;
-            let channelID = channelDetails.id;
 
             // Within the channels we go over the members. 
             if (channelMembers.hasOwnProperty(oldIrcDisplayName)) {
                 let tempMember = channelMembers[oldIrcDisplayName];
                 tempMember.displayName = newDiscordDisplayName;
                 tempMember.ircNick = newIrcDisplayName;
-
+                memberId = tempMember.id;
                 delete channelObject[guildID][channel].members[oldIrcDisplayName];
                 channelObject[guildID][channel].members[oldIrcDisplayName] = tempMember;
                 foundInChannels = true;
@@ -300,7 +300,7 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
     }
     if (foundInChannels) {
         console.log(`Changing nickname ${oldIrcDisplayName} into ${newIrcDisplayName}`);
-        sendToIRC(guildID, `:${oldIrcDisplayName}!${tempMember.id}@whatever NICK ${newIrcDisplayName}\r\n`);
+        sendToIRC(guildID, `:${oldIrcDisplayName}!${memberId}@whatever NICK ${newIrcDisplayName}\r\n`);
     }
 }
 
@@ -338,7 +338,6 @@ discordClient.on('presenceUpdate', function(oldMember, newMember) {
 });
 
 discordClient.on('guildMemberUpdate', function(oldMember, newMember) {
-    isEmptyObj(channelObject)
     if (ircClients.length > 0) {
         console.log('guildMemberUpdate');
         const guildID = newMember.guild.id;
@@ -398,7 +397,7 @@ chatEmitter.on('joinCommand', function(details) {
     const channel = details.channel;
     const discordID = details.discordID;
     let members = '';
-    const nickname = channelObject[discordID]['ircDisplayName'];
+    const nickname = channelObject[discordID].ircDisplayName;
 
     if (channelObject[discordID].hasOwnProperty(channel)) {
         const channelProperties = channelObject[discordID][channel];
@@ -408,7 +407,6 @@ chatEmitter.on('joinCommand', function(details) {
         channelObject[discordID][channel]['members'] = {};
         const channelTopic = channelProperties.topic;
 
-        
 
 
 
@@ -416,7 +414,7 @@ chatEmitter.on('joinCommand', function(details) {
             const displayMember = ircNickname(member.displayName);
 
             if (member.presence.status === 'online' || member.presence.status === 'idle' || member.presence.status === 'dnd') {
-                channelObject[discordID][channel]['members'][displayMember] = {
+                channelObject[discordID][channel].members[displayMember] = {
                     discordName: member.displayName,
                     discordState: member.presence.status,
                     ircNick: displayMember,
@@ -445,10 +443,10 @@ chatEmitter.on('joinCommand', function(details) {
 
 
         setTimeout(function() {
-            for (var key in channelObject[discordID][channel]['members']) {
-                if (channelObject[discordID][channel]['members'].hasOwnProperty(key)) {
+            for (var key in channelObject[discordID][channel].members) {
+                if (channelObject[discordID][channel].members.hasOwnProperty(key)) {
 
-                    let member = channelObject[discordID][channel]['members'][key]
+                    let member = channelObject[discordID][channel].members[key];
                     let nickname = member.ircNick;
                     if (member.discordState === 'idle' || member.discordState === 'dnd') {
 
@@ -542,7 +540,7 @@ let ircServer = net.createServer(function(socket) {
                     case 'JOIN':
                         const joinChannels = parsedLine.params[0].split(',');
 
-                        joinChannels.forEach(function(channel, index) {
+                        joinChannels.forEach(function(channel) {
                             chatEmitter.emit('joinCommand', {
                                 channel: channel.substring(1),
                                 discordID: socket.discordid
