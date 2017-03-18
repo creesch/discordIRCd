@@ -556,6 +556,9 @@ let ircServer = net.createServer(function(socket) {
                         lastPRIVMSG = sendLine;
                         discordClient.channels.get(channelObject[socket.discordid][channelName].id).sendMessage(sendLine);
                         break;
+                    case 'QUIT':
+                        socket.end();
+                        break;
                 }
             }
         });
