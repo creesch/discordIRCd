@@ -1,0 +1,5 @@
+config.js
+/.idea
+/.settings
+/.vscode
+/node_modules

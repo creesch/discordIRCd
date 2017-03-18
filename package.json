@@ -1,0 +1,29 @@
+{
+  "name": "discord-ircd",
+  "version": "0.5.0",
+  "description": "Allows you to connect to discord with your irc client",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creesch/discordIRCd.git"
+  },
+  "keywords": [
+    "discord",
+    "irc",
+    "ircd"
+  ],
+  "author": "creesch",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/creesch/discordIRCd/issues"
+  },
+  "homepage": "https://github.com/creesch/discordIRCd#readme",
+  "dependencies": {
+    "bufferutil": "^3.0.0",
+    "discord.js": "^11.0.0",
+    "erlpack": "github:hammerandchisel/erlpack"
+  }
+}
