@@ -8,6 +8,7 @@ It also has been tested somewhat with Hexchat.
 
 ## Usage 
 
+- Run `NPM install`
 - Edit config.js to your personal preferences. Your Discord token can be aquired by going into your browsers developer tools and grabbing it from localstorage there. 
 - Start the server through server.js 
 - Connect with your ircclient to the server at the given adress with the following details: 
