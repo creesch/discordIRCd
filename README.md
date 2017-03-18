@@ -2,7 +2,7 @@
 Allows you to connect to discord with your irc client.
 
 ![I really like the way I have it set up!](https://imgs.xkcd.com/comics/team_chat.png)  
-^^https://xkcd.com/1782/
+https://xkcd.com/1782/
 
 # DISCLAIMER 
 
