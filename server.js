@@ -277,7 +277,7 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
             }
 
             // If the user is currently in irc but not in the discord channel they have left the channel. 
-            if (isCurrentlyInIRC && !isInDiscordChannel) {
+            if (isCurrentlyInIRC && !isInDiscordChannel) {                
                 console.log(`User ${ircDisplayName} left ${channel}`);
                 sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever PART #${channel}\r\n`);
                 delete channelObject[guildID][channel].members[ircDisplayName];
@@ -358,7 +358,11 @@ discordClient.on('guildMemberUpdate', function(oldMember, newMember) {
         const newDiscordDisplayName = newMember.displayName;
 
         if (oldIrcDisplayName !== newIrcDisplayName) {
-            guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, newDiscordDisplayName);
+            if (newMember.id === discordClient.user.id) {
+                sendToIRC(newMember.guild.id, `:${oldIrcDisplayName}!${discordClient.user.id}@whatever NICK ${newIrcDisplayName}\r\n`);
+            } else {
+                guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, newDiscordDisplayName);
+            }
         } else {
             guildMemberCheckChannels(guildID, newIrcDisplayName, newMember);
         }
@@ -558,6 +562,17 @@ function listCommand(discordID) {
 
 }
 
+// Part command given, let's part the channel. 
+function partCommand(channel, discordID) {
+    const nickname = channelObject[discordID].ircDisplayName;
+    if (channelObject[discordID].hasOwnProperty(channel)) {
+        // Let's clear the channel
+        channelObject[discordID][channel].members = {};
+        channelObject[discordID][channel].joined = false;
+        sendToIRC(discordID, `:${nickname}!${discordClient.user.id}@whatever PART #${channel}\r\n`);
+    }
+}
+
 //
 // Irc Related functionality.
 //
@@ -621,7 +636,7 @@ let ircServer = net.createServer(function(socket) {
                         socket.nickname = newNickname;
                         socket.authenticated = true;
                         const connectArray = [
-                            `:${nickname}!${discordClient.user.id}@okay NICK ${newNickname}\r\n`,
+                            `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
                             `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
                             `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
                         ];
@@ -649,6 +664,13 @@ let ircServer = net.createServer(function(socket) {
                             joinCommand(channel.substring(1), socket.discordid);
                         });
 
+                        break;
+                    case 'PART':
+                        const partChannels = parsedLine.params[0].split(',');
+
+                        partChannels.forEach(function(channel) {
+                            partCommand(channel.substring(1), socket.discordid);
+                        });
                         break;
                     case 'PRIVMSG':
                         const channelName = parsedLine.params[0].substring(1);
