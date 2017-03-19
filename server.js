@@ -22,9 +22,6 @@ let ircClients = [];
 // Simply used to give each new socket a unique number. 
 let ircClientCount = 0;
 
-// To prevent irc messages from echoing back through discord.
-let lastPRIVMSG = {};
-
 // This is used to make sure that if discord reconnects not everything is wiped. 
 let discordFirstConnection = true;
 
