@@ -434,7 +434,7 @@ discordClient.on('guildMemberAdd', function(GuildMember) {
 
 // Processing received messages 
 discordClient.on('message', function(msg) {
-    if (ircClients.length > 0) {
+    if (ircClients.length > 0 && msg.channel.type === 'text')  {
         const discordServerId = msg.guild.id;
         const authorDisplayName = msg.member.displayName;
         const isBot = msg.author.bot;
@@ -442,8 +442,8 @@ discordClient.on('message', function(msg) {
         const channelName = msg.channel.name;
 
         // Only act on text channels and if the user has joined them in irc. 
-
-        if (msg.channel.type === 'text' && ircDetails[discordServerId][channelName].joined) {
+        console.log(typeof msg.channel)
+        if (ircDetails[discordServerId][channelName].joined) {
             let ownNickname;
 
             ircClients.forEach(function(socket) {
