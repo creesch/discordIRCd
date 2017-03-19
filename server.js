@@ -14,7 +14,12 @@ const Discord = require("discord.js");
 //
 
 // Object which will contain channel information.
-let ircDetails = {};
+let ircDetails = { 
+    DMserver: {
+        nicknameUniqueCounter: 0,
+        lastPRIVMSG: []
+    }
+};
 
 // Since we want a seperate connection for each discord server we will need to store our sockets. 
 let ircClients = [];
@@ -442,7 +447,6 @@ discordClient.on('message', function(msg) {
         const channelName = msg.channel.name;
 
         // Only act on text channels and if the user has joined them in irc. 
-        console.log(typeof msg.channel)
         if (ircDetails[discordServerId][channelName].joined) {
             let ownNickname;
 
@@ -452,12 +456,8 @@ discordClient.on('message', function(msg) {
                 }
             });
 
-            // We need the guild id to send the message to the correct socket. 
-
             // IRC does not handle newlines. So we split the message up per line and send them seperatly.
             const messageArray = msg.content.split(/\r?\n/);
-
-
 
             const attachmentArray = msg.attachments.array();
             if (attachmentArray.length > 0) {
@@ -506,12 +506,7 @@ discordClient.on('message', function(msg) {
                 messageArray.push(`You are mentioned: ${ownNickname}`)
             }
 
-
-
             messageArray.forEach(function(line) {
-
-
-
 
                     const messageTemplate = `:${authorIrcName}!${msg.member.id}@whatever PRIVMSG #${channelName} :`;
                     const messageTemplateLength = messageTemplate.length;
@@ -524,7 +519,7 @@ discordClient.on('message', function(msg) {
                     linesArray.forEach(function(sendLine) {
                         // Trying to prevent messages from irc echoing back and showing twice.
                         if (ircDetails[discordServerId].lastPRIVMSG.indexOf(sendLine) < 0)  {
-                            const lineToSend = parseDiscordLine(sendLine, discordServerId, channelName);
+                            const lineToSend = parseDiscordLine(sendLine, discordServerId);
                             const message = `${messageTemplate}${lineToSend}\r\n`;
                             sendToIRC(discordServerId, message);
                         }
@@ -533,6 +528,63 @@ discordClient.on('message', function(msg) {
                 
             });
         }
+    }
+    if (ircClients.length > 0 && msg.channel.type === 'dm')  {
+        const discordServerId = 'DMserver';
+        const authorDisplayName = msg.author.username;
+        const isBot = msg.author.bot;
+        const authorIrcName = ircNickname(authorDisplayName, discordServerId, isBot);
+        const recipientIsBot = msg.channel.recipient.bot;
+        const recipient = ircNickname(msg.channel.recipient.username, discordServerId, recipientIsBot);
+        let ownNickname;
+
+        ircClients.forEach(function(socket) {
+            if (socket.discordid === discordServerId) {
+                ownNickname = socket.nickname;
+            }
+        });
+
+        // IRC does not handle newlines. So we split the message up per line and send them seperatly.
+        const messageArray = msg.content.split(/\r?\n/);
+        
+        const attachmentArray = msg.attachments.array();
+        if (attachmentArray.length > 0) {
+            attachmentArray.forEach(function(attachment) {
+                const filename = attachment.filename;
+                const url = attachment.url;
+                const attachmentLine = `${filename}: ${url}`;
+                messageArray.push(attachmentLine);
+            });
+        }
+
+        messageArray.forEach(function(line) {
+                let messageTemplate;
+                if (authorIrcName === ownNickname) {
+                    messageTemplate = `:${authorIrcName}!${msg.author.id}@whatever PRIVMSG ${recipient} :`;
+                } else {
+                    messageTemplate = `:${authorIrcName}!${msg.author.id}@whatever PRIVMSG ${ownNickname} :`;
+                }
+
+
+                const messageTemplateLength = messageTemplate.length;
+                const remainingLength = maxLineLength - messageTemplateLength;
+
+                const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g')
+
+                const linesArray = line.match(matchRegex) || [];
+
+                linesArray.forEach(function(sendLine) {
+                    // Trying to prevent messages from irc echoing back and showing twice.
+                    if (ircDetails[discordServerId].lastPRIVMSG.indexOf(sendLine) < 0)  {
+                        const lineToSend = parseDiscordLine(sendLine, discordServerId);
+                        const message = `${messageTemplate}${lineToSend}\r\n`;
+                        sendToIRC(discordServerId, message);
+                    }
+                });
+
+            
+        });
+
     }
 });
 
@@ -714,13 +766,12 @@ let ircServer = net.createServer(function(socket) {
                     // Now we are connected let's change the nickname first to whatever it is on discord. 
 
                     // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
-                    discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
-                        const newuser = guildMember.displayName;
+                    if (socket.discordid === 'DMserver') {
+                        const newuser = discordClient.user.username;
                         const newNickname = ircNickname(newuser, socket.discordid, false);
 
                         ircDetails[socket.discordid]['discordDisplayName'] = newuser;
                         ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
-
                         socket.user = newuser;
                         socket.nickname = newNickname;
                         socket.authenticated = true;
@@ -734,8 +785,34 @@ let ircServer = net.createServer(function(socket) {
                             socket.write(line);
                         });
 
+                    } else if (discordClient.guilds.get(socket.discordid)) {
+                        discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
+                            const newuser = guildMember.displayName;
+                            const newNickname = ircNickname(newuser, socket.discordid, false);
 
-                    });
+                            ircDetails[socket.discordid]['discordDisplayName'] = newuser;
+                            ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
+
+                            socket.user = newuser;
+                            socket.nickname = newNickname;
+                            socket.authenticated = true;
+                            const connectArray = [
+                                `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
+                                `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
+                                `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
+                            ];
+
+                            connectArray.forEach(function(line) {
+                                socket.write(line);
+                            });
+
+
+                        });
+                    } else {
+                        // Things are not working out, let's end this. 
+                        socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
+                        socket.end();
+                    }
 
                 } else {
                     // Things are not working out, let's end this. 
