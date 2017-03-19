@@ -6,7 +6,6 @@ if (!configuration.DEBUG) {
     console.log = function() {};
 }
 
-
 const net = require('net');
 const Discord = require("discord.js");
 
@@ -47,7 +46,7 @@ function parseMessage(line) {
     let message = {};
     let m = /(:[^ ]+ )?([A-Z0-9]+)(?: (.*))?/i.exec(line);
     if (!m) {
-        message.error = 'Unable to parse message';
+        message['error'] = 'Unable to parse message';
     } else {
         let i;
         if (m[3] && (i = m[3].indexOf(':')) !== -1) {
@@ -160,7 +159,7 @@ function parseIRCLine(line, discordID, channel) {
             const userID = ircDetails[discordID][channel].members[userNickname].id;
             const replaceRegex = new RegExp(mention, 'g');
             if (userID) {
-                line = line.replace(replaceRegex, `<@!${userID}>`);
+                line = line.replace(replaceRegex, `<@!${userID}> `);
             }
         });
     }
@@ -239,7 +238,8 @@ discordClient.on('ready', function() {
 
                 if (!ircDetails.hasOwnProperty(guildID)) {
                     ircDetails[guildID] = {
-                        nicknameUniqueCounter: 0
+                        nicknameUniqueCounter: 0,
+                        lastPRIVMSG: []
                     };
                 }
                 ircDetails[guildID][channelName] = {
@@ -512,10 +512,9 @@ discordClient.on('message', function(msg) {
 
 
             messageArray.forEach(function(line) {
-                // Trying to prevent messages from irc echoing back and showing twice.
-                if (lastPRIVMSG[discordServerId] !== line) {
-                    // Let's make sure the line isn't too long. 
-                    // We do this here and not earlier since we can be fairly sure that lastPRIVMSG isn't too long since it came from irc. 
+
+
+
 
                     const messageTemplate = `:${authorIrcName}!${msg.member.id}@whatever PRIVMSG #${channelName} :`;
                     const messageTemplateLength = messageTemplate.length;
@@ -526,12 +525,15 @@ discordClient.on('message', function(msg) {
                     const linesArray = line.match(matchRegex) || [];
 
                     linesArray.forEach(function(sendLine) {
-                        const lineToSend = parseDiscordLine(sendLine, discordServerId, channelName);
-                        const message = `${messageTemplate}${lineToSend}\r\n`;
-                        sendToIRC(discordServerId, message);
+                        // Trying to prevent messages from irc echoing back and showing twice.
+                        if (ircDetails[discordServerId].lastPRIVMSG.indexOf(sendLine) < 0)  {
+                            const lineToSend = parseDiscordLine(sendLine, discordServerId, channelName);
+                            const message = `${messageTemplate}${lineToSend}\r\n`;
+                            sendToIRC(discordServerId, message);
+                        }
                     });
 
-                }
+                
             });
         }
     }
@@ -763,10 +765,15 @@ let ircServer = net.createServer(function(socket) {
                         });
                         break;
                     case 'PRIVMSG':
-                        console.log(parsedLine);
+                        console.log('Parsed line', parsedLine);
                         const channelName = parsedLine.params[0].substring(1);
                         const sendLine = parseIRCLine(parsedLine.params[1], socket.discordid, channelName);
-                        lastPRIVMSG[socket.discordid] = sendLine;
+
+                        if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
+                            ircDetails[socket.discordid].lastPRIVMSG.shift();
+                        }
+
+                        ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
                         discordClient.channels.get(ircDetails[socket.discordid][channelName].id).sendMessage(sendLine);
                         break;
                     case 'QUIT':
