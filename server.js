@@ -639,7 +639,7 @@ let ircServer = net.createServer(function(socket) {
                         break;
                     case 'PING':
                         
-                        socket.write(`${configuration.ircServer.hostname} PONG ${configuration.ircServer.hostname} :${socket.pongcount}\r\n`);
+                        socket.write(`:${configuration.ircServer.hostname} PONG ${configuration.ircServer.hostname} :${socket.pongcount}\r\n`);
                         socket.pongcount = socket.pongcount+1;
 
                 }
