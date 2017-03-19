@@ -30,6 +30,9 @@ let ircClientCount = 0;
 // To prevent irc messages from echoing back through discord.
 let lastPRIVMSG = '';
 
+// This is used to make sure that if discord reconnects not everything is wiped. 
+let discordFirstConnection = true;
+
 //
 // Generic functions
 //
@@ -171,27 +174,35 @@ discordClient.on('ready', function() {
 
     console.log(`Logged in as ${discordClient.user.username}!`);
 
+    
     // Lets grab some basic information we will need eventually. 
-    discordClient.channels.array().forEach(function(channel) {
-        // Of course only for channels. 
-        if (channel.type === 'text') {
-            const guildID = channel.guild.id,
-                channelName = channel.name,
-                channelID = channel.id,
-                channelTopic = channel.topic || 'No topic';
+    // But only do so if this is the first time connecting. 
+    if (discordFirstConnection) {
+        discordFirstConnection = false; 
+    
+        
+        discordClient.channels.array().forEach(function(channel) {
+            // Of course only for channels. 
+            if (channel.type === 'text') {
+                const guildID = channel.guild.id,
+                    channelName = channel.name,
+                    channelID = channel.id,
+                    channelTopic = channel.topic || 'No topic';
 
-            if (!channelObject.hasOwnProperty(guildID)) {
-                channelObject[guildID] = {};
+                if (!channelObject.hasOwnProperty(guildID)) {
+                    channelObject[guildID] = {};
+                }
+                channelObject[guildID][channelName] = {
+                    id: channelID,
+                    joined: false,
+                    topic: channelTopic
+                };
             }
-            channelObject[guildID][channelName] = {
-                id: channelID,
-                joined: false,
-                topic: channelTopic
-            };
-        }
-    });
+        });
 
-    ircServer.listen(configuration.ircServer.listenPort);
+        // Now that is done we can start the irc server side of things. 
+        ircServer.listen(configuration.ircServer.listenPort);
+    }
 });
 
 //
@@ -629,7 +640,7 @@ let ircServer = net.createServer(function(socket) {
                     case 'PING':
                         
                         socket.write(`${configuration.ircServer.hostname} PONG ${configuration.ircServer.hostname} :${socket.pongcount}\r\n`);
-                        socket.pongcount = socket.pongcoun+1;
+                        socket.pongcount = socket.pongcount+1;
 
                 }
             }
