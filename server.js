@@ -537,6 +537,11 @@ let ircServer = net.createServer(function(socket) {
     socket.pongcount = 1;
     socket.authenticated = false;
 
+    socket.on('error', function(error) {
+        console.log('Socket error: ', error);
+        socket.end();
+
+    });
     socket.on('data', function(data) {
         console.log('data:', data);
         // Data can be multiple lines. Here we put each line in an array. 
