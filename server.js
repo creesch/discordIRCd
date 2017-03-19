@@ -24,12 +24,13 @@ let ircClients = [];
 let ircClientCount = 0;
 
 // To prevent irc messages from echoing back through discord.
-let lastPRIVMSG = '';
+let lastPRIVMSG = {};
 
 // This is used to make sure that if discord reconnects not everything is wiped. 
 let discordFirstConnection = true;
 
-// Nickname number. 
+// Max line lenght for irc messages. 
+const maxLineLength = 510;
 
 //
 // Generic functions
@@ -109,11 +110,11 @@ function parseDiscordLine(line, discordID) {
     line = line.replace(/\x0F{2,}/g, '\x0F');
 
     // Now let's replace mentions with names we can recognize. 
-    const mentionRegex = /(<@!?\d{1,}?>)/g;
-    const mentionFound = line.match(mentionRegex);
+    const mentionUserRegex = /(<@!?\d{1,}?>)/g;
+    const mentionUserFound = line.match(mentionUserRegex);
 
-    if (mentionFound) {
-        mentionFound.forEach(function(mention) {
+    if (mentionUserFound) {
+        mentionUserFound.forEach(function(mention) {
             const userID = mention.replace(/<@!?(\d{1,}?)>/, '$1');
             const memberObject = discordClient.guilds.get(discordID).members.get(userID);
             const displayName = memberObject.displayName;
@@ -126,6 +127,23 @@ function parseDiscordLine(line, discordID) {
             }
         });
     }
+
+    // Now let's do this again and replace mentions with roles we can recognize. 
+    const mentionRoleRegex = /(<@&\d{1,}?>)/g;
+    const mentionRoleFound = line.match(mentionRoleRegex);
+    if (mentionRoleFound) {
+        mentionRoleFound.forEach(function(mention) {
+            const roleID = mention.replace(/<@&(\d{1,}?)>/, '$1');
+            const roleObject = discordClient.guilds.get(discordID).roles.get(roleID);    
+
+            const replaceRegex = new RegExp(mention, 'g');
+            if (roleObject) {
+                const name = roleObject.name;
+                line = line.replace(replaceRegex, `@${name}`);
+            }
+        });
+    }
+
     return line;
 }
 
@@ -436,8 +454,6 @@ discordClient.on('message', function(msg) {
                     ownNickname = socket.nickname;
                 }
             });
-            console.log('message');
-            console.log(msg);
 
             // We need the guild id to send the message to the correct socket. 
 
@@ -497,10 +513,24 @@ discordClient.on('message', function(msg) {
 
             messageArray.forEach(function(line) {
                 // Trying to prevent messages from irc echoing back and showing twice.
-                if (lastPRIVMSG !== line) {
-                    const lineToSend = parseDiscordLine(line, discordServerId, channelName);
-                    const message = `:${authorIrcName}!${msg.member.id}@test PRIVMSG #${channelName} :${lineToSend}\r\n`;
-                    sendToIRC(discordServerId, message);
+                if (lastPRIVMSG[discordServerId] !== line) {
+                    // Let's make sure the line isn't too long. 
+                    // We do this here and not earlier since we can be fairly sure that lastPRIVMSG isn't too long since it came from irc. 
+
+                    const messageTemplate = `:${authorIrcName}!${msg.member.id}@whatever PRIVMSG #${channelName} :`;
+                    const messageTemplateLength = messageTemplate.length;
+                    const remainingLength = maxLineLength - messageTemplateLength;
+
+                    const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g')
+
+                    const linesArray = line.match(matchRegex) || [];
+
+                    linesArray.forEach(function(sendLine) {
+                        const lineToSend = parseDiscordLine(sendLine, discordServerId, channelName);
+                        const message = `${messageTemplate}${lineToSend}\r\n`;
+                        sendToIRC(discordServerId, message);
+                    });
+
                 }
             });
         }
@@ -510,7 +540,11 @@ discordClient.on('message', function(msg) {
 // Join command given, let's join the channel. 
 function joinCommand(channel, discordID) {
     let members = '';
+    let memberListLines = [];
     const nickname = ircDetails[discordID].ircDisplayName;
+    const memberlistTemplate = `:${configuration.ircServer.hostname} 353 ${nickname} @ #${channel} :`;
+    const memberlistTemplateLength = memberlistTemplate.length;
+
 
     if (ircDetails[discordID].hasOwnProperty(channel)) {
         const channelProperties = ircDetails[discordID][channel];
@@ -534,9 +568,22 @@ function joinCommand(channel, discordID) {
                     ircNick: displayMember,
                     id: member.id
                 };
-                members = `${members} ${displayMember}`;
+                const membersPlusDisplayMember = `${members} ${displayMember}`;
+                const newLineLenght = membersPlusDisplayMember.length;
+                const combinedLineLength = newLineLenght + memberlistTemplateLength;
+
+                if (combinedLineLength < maxLineLength) {
+                    members = `${members} ${displayMember}`;
+                } else {
+                    memberListLines.push(members);
+                    members = displayMember;
+                }
+                
             }
         });
+
+        memberListLines.push(members);
+        
 
         const joinMSG = `:${nickname} JOIN #${channel}\r\n`;
         console.log(joinMSG);
@@ -547,9 +594,12 @@ function joinCommand(channel, discordID) {
         console.log(topicMSG);
         sendToIRC(discordID, topicMSG);
 
-        const memberListMSG = `:${configuration.ircServer.hostname} 353 ${nickname} @ #${channel} :${members}\r\n`;
-        console.log(memberListMSG);
-        sendToIRC(discordID, memberListMSG);
+        memberListLines.forEach(function(line) {
+            const memberListMSG = `:${memberlistTemplate}${line}\r\n`;
+            console.log(memberListMSG);
+            sendToIRC(discordID, memberListMSG);
+        });
+
 
         const endListMSG = `:${configuration.ircServer.hostname} 366 ${nickname} #${channel} :End of /NAMES list.\r\n`;
         console.log(endListMSG);
@@ -713,12 +763,18 @@ let ircServer = net.createServer(function(socket) {
                         });
                         break;
                     case 'PRIVMSG':
+                        console.log(parsedLine);
                         const channelName = parsedLine.params[0].substring(1);
                         const sendLine = parseIRCLine(parsedLine.params[1], socket.discordid, channelName);
-                        lastPRIVMSG = sendLine;
+                        lastPRIVMSG[socket.discordid] = sendLine;
                         discordClient.channels.get(ircDetails[socket.discordid][channelName].id).sendMessage(sendLine);
                         break;
                     case 'QUIT':
+                        for (let channel in ircDetails[socket.discordid]) {
+                            if (ircDetails[socket.discordid].hasOwnProperty(channel) && ircDetails[socket.discordid][channel].joined) {
+                                ircDetails[socket.discordid][channel].joined = false;
+                            }
+                        }
                         socket.end();
                         break;
                     case 'PING':
