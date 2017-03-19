@@ -15,7 +15,7 @@ const Discord = require("discord.js");
 //
 
 // Object which will contain channel information.
-let channelObject = {};
+let ircDetails = {};
 
 // Since we want a seperate connection for each discord server we will need to store our sockets. 
 let ircClients = [];
@@ -29,9 +29,13 @@ let lastPRIVMSG = '';
 // This is used to make sure that if discord reconnects not everything is wiped. 
 let discordFirstConnection = true;
 
+// Nickname number. 
+
 //
 // Generic functions
 //
+
+
 
 function isEmptyObj(obj) {
     return (Object.keys(obj).length === 0 && obj.constructor === Object);
@@ -66,9 +70,32 @@ function parseMessage(line) {
     return message;
 }
 
+// Returns a number based on the discord server that increases per call.
+// Used to make fairly sure nicknames on irc end up being unique after being scrubbed. 
+
+function giveIncrement(discordID) {
+    
+    ircDetails[discordID].nicknameUniqueCounter++;
+    return ircDetails[discordID].nicknameUniqueCounter;
+}
+
 // Make nicknames work for irc. 
-function ircNickname(discordDisplayName) {
-    return discordDisplayName.replace(/[^a-zA-Z0-9_\\[\]\{\}\^`\|]/g, '_');
+function ircNickname(discordDisplayName, discordID) {
+    const replaceRegex = /[^a-zA-Z0-9_\\[\]\{\}\^`\|]/g;
+    const shortenRegex = /_{1,}/g;
+
+    if (replaceRegex.test(discordDisplayName)) {
+        
+        let newDisplayname = `${discordDisplayName.replace(replaceRegex, '_')}${giveIncrement(discordID)}`;
+        newDisplayname = newDisplayname.replace(shortenRegex, '_');
+        
+        return newDisplayname;
+
+    } else {
+        return discordDisplayName;
+    }
+
+
 }
 
 
@@ -88,7 +115,7 @@ function parseDiscordLine(line, discordID) {
     if (mentionFound) {
         mentionFound.forEach(function(mention) {
             const userID = mention.replace(/<@!?(\d{1,}?)>/, '$1');
-            const userName = ircNickname(discordClient.guilds.get(discordID).members.get(userID).displayName);
+            const userName = ircNickname(discordClient.guilds.get(discordID).members.get(userID).displayName, discordID);
             const replaceRegex = new RegExp(mention, 'g');
             if (userName) {
                 line = line.replace(replaceRegex, `@${userName}`);
@@ -108,7 +135,7 @@ function parseIRCLine(line, discordID, channel) {
         mentionFound.forEach(function(mention) {
             const userNickname = mention.replace(/@(.{1,}?)\s/, '$1');
 
-            const userID = channelObject[discordID][channel].members[userNickname].id;
+            const userID = ircDetails[discordID][channel].members[userNickname].id;
             const replaceRegex = new RegExp(mention, 'g');
             if (userID) {
                 line = line.replace(replaceRegex, `<@!${userID}>`);
@@ -188,10 +215,12 @@ discordClient.on('ready', function() {
                     channelID = channel.id,
                     channelTopic = channel.topic || 'No topic';
 
-                if (!channelObject.hasOwnProperty(guildID)) {
-                    channelObject[guildID] = {};
+                if (!ircDetails.hasOwnProperty(guildID)) {
+                    ircDetails[guildID] = {
+                        nicknameUniqueCounter: 0
+                    };
                 }
-                channelObject[guildID][channelName] = {
+                ircDetails[guildID][channelName] = {
                     id: channelID,
                     joined: false,
                     topic: channelTopic
@@ -215,19 +244,19 @@ discordClient.on('ready', function() {
 function guildMemberNoMore(guildID, ircDisplayName, noMoreReason) {
     let found = false;
     // First we go over the channels. 
-    for (let channel in channelObject[guildID]) {
-        if (channelObject[guildID].hasOwnProperty(channel) && channelObject[guildID][channel].joined) {
+    for (let channel in ircDetails[guildID]) {
+        if (ircDetails[guildID].hasOwnProperty(channel) && ircDetails[guildID][channel].joined) {
 
-            let channelMembers = channelObject[guildID][channel].members;
+            let channelMembers = ircDetails[guildID][channel].members;
             // Within the channels we go over the members. 
             if (channelMembers.hasOwnProperty(ircDisplayName)) {
                 if (!found) {
-                    let memberDetails = channelObject[guildID][channel].members[ircDisplayName];
+                    let memberDetails = ircDetails[guildID][channel].members[ircDisplayName];
                     console.log(`User ${ircDisplayName} quit ${noMoreReason}`);
                     sendToIRC(guildID, `:${ircDisplayName}!${memberDetails.id}@whatever QUIT :${noMoreReason}\r\n`);
                     found = true;
                 }
-                delete channelObject[guildID][channel].members[ircDisplayName];
+                delete ircDetails[guildID][channel].members[ircDisplayName];
             }
         }
     }
@@ -235,12 +264,12 @@ function guildMemberNoMore(guildID, ircDisplayName, noMoreReason) {
 
 function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
     // First we go over the channels. 
-    for (let channel in channelObject[guildID]) {
-        if (channelObject[guildID].hasOwnProperty(channel) && channelObject[guildID][channel].joined) {
+    for (let channel in ircDetails[guildID]) {
+        if (ircDetails[guildID].hasOwnProperty(channel) && ircDetails[guildID][channel].joined) {
             let isInDiscordChannel = false;
             let isCurrentlyInIRC = false;
 
-            let channelDetails = channelObject[guildID][channel];
+            let channelDetails = ircDetails[guildID][channel];
             let channelMembers = channelDetails.members;
             let channelID = channelDetails.id;
 
@@ -261,7 +290,7 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
 
             // If the user is in the discord channel but not irc we will add the user. 
             if (!isCurrentlyInIRC && isInDiscordChannel) {
-                channelObject[guildID][channel].members[ircDisplayName] = {
+                ircDetails[guildID][channel].members[ircDisplayName] = {
                     discordName: guildMember.displayName,
                     discordState: guildMember.presence.status,
                     ircNick: ircDisplayName,
@@ -280,7 +309,7 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
             if (isCurrentlyInIRC && !isInDiscordChannel) {                
                 console.log(`User ${ircDisplayName} left ${channel}`);
                 sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever PART #${channel}\r\n`);
-                delete channelObject[guildID][channel].members[ircDisplayName];
+                delete ircDetails[guildID][channel].members[ircDisplayName];
             }
 
         }
@@ -291,10 +320,10 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
     // First we go over the channels. 
     let foundInChannels = false;
     let memberId;
-    for (let channel in channelObject[guildID]) {
-        if (channelObject[guildID].hasOwnProperty(channel) && channelObject[guildID][channel].joined) {
+    for (let channel in ircDetails[guildID]) {
+        if (ircDetails[guildID].hasOwnProperty(channel) && ircDetails[guildID][channel].joined) {
 
-            let channelDetails = channelObject[guildID][channel];
+            let channelDetails = ircDetails[guildID][channel];
             let channelMembers = channelDetails.members;
 
             // Within the channels we go over the members. 
@@ -303,8 +332,8 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
                 tempMember.displayName = newDiscordDisplayName;
                 tempMember.ircNick = newIrcDisplayName;
                 memberId = tempMember.id;
-                delete channelObject[guildID][channel].members[oldIrcDisplayName];
-                channelObject[guildID][channel].members[oldIrcDisplayName] = tempMember;
+                delete ircDetails[guildID][channel].members[oldIrcDisplayName];
+                ircDetails[guildID][channel].members[oldIrcDisplayName] = tempMember;
                 foundInChannels = true;
 
             }
@@ -320,7 +349,7 @@ discordClient.on('guildMemberRemove', function(GuildMember) {
     if (ircClients.length > 0) {
         console.log('guildMemberRemove');
         const guildID = GuildMember.guild.id;
-        const ircDisplayName = ircNickname(GuildMember.displayName);
+        const ircDisplayName = ircNickname(GuildMember.displayName, guildID);
         guildMemberNoMore(guildID, ircDisplayName, 'User removed');
     }
 });
@@ -329,7 +358,7 @@ discordClient.on('presenceUpdate', function(oldMember, newMember) {
     if (ircClients.length > 0) {
 
         const guildID = newMember.guild.id;
-        const ircDisplayName = ircNickname(newMember.displayName);
+        const ircDisplayName = ircNickname(newMember.displayName, guildID);
         const oldPresenceState = oldMember.presence.status;
         const newPresenceState = newMember.presence.status;
 
@@ -353,8 +382,8 @@ discordClient.on('guildMemberUpdate', function(oldMember, newMember) {
     if (ircClients.length > 0) {
         console.log('guildMemberUpdate');
         const guildID = newMember.guild.id;
-        const oldIrcDisplayName = ircNickname(oldMember.displayName);
-        const newIrcDisplayName = ircNickname(newMember.displayName);
+        const oldIrcDisplayName = ircNickname(oldMember.displayName, guildID);
+        const newIrcDisplayName = ircNickname(newMember.displayName, guildID);
         const newDiscordDisplayName = newMember.displayName;
 
         if (oldIrcDisplayName !== newIrcDisplayName) {
@@ -373,7 +402,7 @@ discordClient.on('guildMemberAdd', function(GuildMember) {
     if (ircClients.length > 0) {
         console.log('guildMemberAdd');
         const guildID = GuildMember.guild.id;
-        const ircDisplayName = ircNickname(GuildMember.displayName);
+        const ircDisplayName = ircNickname(GuildMember.displayName, guildID);
         guildMemberCheckChannels(guildID, ircDisplayName, GuildMember);
     }
 });
@@ -384,12 +413,12 @@ discordClient.on('message', function(msg) {
     if (ircClients.length > 0) {
         const discordServerId = msg.guild.id;
         const authorDisplayName = msg.member.displayName;
-        const authorIrcName = ircNickname(authorDisplayName);
+        const authorIrcName = ircNickname(authorDisplayName, discordServerId);
         const channelName = msg.channel.name;
 
         // Only act on text channels and if the user has joined them in irc. 
 
-        if (msg.channel.type === 'text' && channelObject[discordServerId][channelName].joined) {
+        if (msg.channel.type === 'text' && ircDetails[discordServerId][channelName].joined) {
             let ownNickname;
 
             ircClients.forEach(function(socket) {
@@ -437,8 +466,8 @@ discordClient.on('message', function(msg) {
             }
 
             if (msg.mentions.channels.array().length > 0) {
-                for (let channel in channelObject[guildID]) {
-                    if (channelObject[discordServerId].hasOwnProperty(channel) && channelObject[discordServerId][channel].joined) {
+                for (let channel in ircDetails[guildID]) {
+                    if (ircDetails[discordServerId].hasOwnProperty(channel) && ircDetails[discordServerId][channel].joined) {
                         if (msg.isMentioned(channel)) {
                             memberMentioned = true;
                         }
@@ -471,24 +500,24 @@ discordClient.on('message', function(msg) {
 // Join command given, let's join the channel. 
 function joinCommand(channel, discordID) {
     let members = '';
-    const nickname = channelObject[discordID].ircDisplayName;
+    const nickname = ircDetails[discordID].ircDisplayName;
 
-    if (channelObject[discordID].hasOwnProperty(channel)) {
-        const channelProperties = channelObject[discordID][channel];
+    if (ircDetails[discordID].hasOwnProperty(channel)) {
+        const channelProperties = ircDetails[discordID][channel];
         const channelContent = discordClient.channels.get(channelProperties.id);
 
-        channelObject[discordID][channel].joined = true;
-        channelObject[discordID][channel]['members'] = {};
+        ircDetails[discordID][channel].joined = true;
+        ircDetails[discordID][channel]['members'] = {};
         const channelTopic = channelProperties.topic;
 
 
 
 
         channelContent.members.array().forEach(function(member) {
-            const displayMember = ircNickname(member.displayName);
+            const displayMember = ircNickname(member.displayName, discordID);
 
             if (member.presence.status === 'online' || member.presence.status === 'idle' || member.presence.status === 'dnd') {
-                channelObject[discordID][channel].members[displayMember] = {
+                ircDetails[discordID][channel].members[displayMember] = {
                     discordName: member.displayName,
                     discordState: member.presence.status,
                     ircNick: displayMember,
@@ -517,10 +546,10 @@ function joinCommand(channel, discordID) {
 
 
         setTimeout(function() {
-            for (let key in channelObject[discordID][channel].members) {
-                if (channelObject[discordID][channel].members.hasOwnProperty(key)) {
+            for (let key in ircDetails[discordID][channel].members) {
+                if (ircDetails[discordID][channel].members.hasOwnProperty(key)) {
 
-                    let member = channelObject[discordID][channel].members[key];
+                    let member = ircDetails[discordID][channel].members[key];
                     let nickname = member.ircNick;
                     if (member.discordState === 'idle' || member.discordState === 'dnd') {
 
@@ -537,7 +566,7 @@ function joinCommand(channel, discordID) {
 
 // List command, let's give back a list of channels.
 function listCommand(discordID) {
-    const nickname = channelObject[discordID].ircDisplayName;
+    const nickname = ircDetails[discordID].ircDisplayName;
     const channels = discordClient.guilds.get(discordID).channels.array();
     let listResponse = [`:${configuration.ircServer.hostname} 321 ${nickname} Channel :Users Name\r\n`];
 
@@ -564,11 +593,11 @@ function listCommand(discordID) {
 
 // Part command given, let's part the channel. 
 function partCommand(channel, discordID) {
-    const nickname = channelObject[discordID].ircDisplayName;
-    if (channelObject[discordID].hasOwnProperty(channel)) {
+    const nickname = ircDetails[discordID].ircDisplayName;
+    if (ircDetails[discordID].hasOwnProperty(channel)) {
         // Let's clear the channel
-        channelObject[discordID][channel].members = {};
-        channelObject[discordID][channel].joined = false;
+        ircDetails[discordID][channel].members = {};
+        ircDetails[discordID][channel].joined = false;
         sendToIRC(discordID, `:${nickname}!${discordClient.user.id}@whatever PART #${channel}\r\n`);
     }
 }
@@ -621,16 +650,16 @@ let ircServer = net.createServer(function(socket) {
                 // We are abusing some irc functionality here to add a tiny bit of security. 
                 // The username the ircclient gives must match with that in the configuration.
                 // If the username is correct and the discordId can be found we are in bussiness. 
-                if ((username === configuration.ircServer.username || usernameAlternative === configuration.ircServer.username) && channelObject[socket.discordid]) {
+                if ((username === configuration.ircServer.username || usernameAlternative === configuration.ircServer.username) && ircDetails[socket.discordid]) {
                     // Now we are connected let's change the nickname first to whatever it is on discord. 
 
                     // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
                     discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
                         const newuser = guildMember.displayName;
-                        const newNickname = ircNickname(newuser);
+                        const newNickname = ircNickname(newuser, socket.discordid);
 
-                        channelObject[socket.discordid]['discordDisplayName'] = newuser;
-                        channelObject[socket.discordid]['ircDisplayName'] = newNickname;
+                        ircDetails[socket.discordid]['discordDisplayName'] = newuser;
+                        ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
 
                         socket.user = newuser;
                         socket.nickname = newNickname;
@@ -676,7 +705,7 @@ let ircServer = net.createServer(function(socket) {
                         const channelName = parsedLine.params[0].substring(1);
                         const sendLine = parseIRCLine(parsedLine.params[1], socket.discordid, channelName);
                         lastPRIVMSG = sendLine;
-                        discordClient.channels.get(channelObject[socket.discordid][channelName].id).sendMessage(sendLine);
+                        discordClient.channels.get(ircDetails[socket.discordid][channelName].id).sendMessage(sendLine);
                         break;
                     case 'QUIT':
                         socket.end();
