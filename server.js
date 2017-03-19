@@ -9,10 +9,6 @@ if (!configuration.DEBUG) {
 
 const net = require('net');
 const Discord = require("discord.js");
-const EventEmitter = require('events');
-
-// Generic emmitter.  
-let chatEmitter = new EventEmitter();
 
 //
 // Let's ready some variables and stuff we will use later on.
