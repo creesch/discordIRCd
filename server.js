@@ -649,8 +649,13 @@ function joinCommand(channel, discordID) {
         console.log(topicMSG);
         sendToIRC(discordID, topicMSG);
 
+        const todayDate = new Date();
+        const seconds = todayDate.getTime() / 1000;
+        const topicMSG2 = `:${configuration.ircServer.hostname} 333 ${nickname} #${channel} noboyknows!orCares@whatever ${seconds}\r\n`;
+        sendToIRC(discordID, topicMSG2);
+
         memberListLines.forEach(function(line) {
-            const memberListMSG = `:${memberlistTemplate}${line}\r\n`;
+            const memberListMSG = `${memberlistTemplate}${line}\r\n`;
             console.log(memberListMSG);
             sendToIRC(discordID, memberListMSG);
         });
@@ -675,6 +680,8 @@ function joinCommand(channel, discordID) {
                 }
             }
         }, 500);
+
+
     } else {
         sendToIRC(discordID, `:${configuration.ircServer.hostname} 473 ${nickname} #${channel} :Cannot join channel\r\n`);
     }
@@ -896,7 +903,7 @@ let ircServer = net.createServer(function(socket) {
 
                             if (socket.discordid !== 'DMserver') {
                                 const messageTemplate = `:${socket.nickname}!${discordClient.user.id}@whatever PRIVMSG ${recipient} :PM Send: Note that replies will not arrive here but on the PM server\r\n`;
-                                sendToIRC(socket.discordid, messageTemplate);
+                                socket.write(messageTemplate);
                             } 
                             if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
                                 ircDetails[socket.discordid].lastPRIVMSG.shift();
