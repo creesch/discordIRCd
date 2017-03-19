@@ -143,21 +143,24 @@ discordClient.on('debug', function(info) {
 // When debugging we probably want to know about errors as well. 
 discordClient.on('error', function(info) {
     console.log('error', info);
+    sendGeneralNotice('Discord error.');
 });
 
 // Emitted when the Client tries to reconnect after being disconnected.
 discordClient.on('reconnecting', function() {
     console.log('reconnecting');
+    sendGeneralNotice('Reconnecting to Discord.');
 });
 
 // Emitted whenever the client websocket is disconnected.
 discordClient.on('disconnect', function(event) {
     console.log('disconnected', event);
+    sendGeneralNotice('Discord has been disconnected.');
 });
 
 // Emitted for general warnings.
 discordClient.on('warn', function(info) {
-    console.log('disconnected', info);
+    console.log('warn', info);
 });
 
 // Discord is ready. 
@@ -198,6 +201,8 @@ discordClient.on('ready', function() {
 
         // Now that is done we can start the irc server side of things. 
         ircServer.listen(configuration.ircServer.listenPort);
+    } else {
+        sendGeneralNotice('Discord connection has been restored.');
     }
 });
 
@@ -680,6 +685,15 @@ function sendToIRC(discordServerId, line) {
         if (socket.discordid === discordServerId) {
             socket.write(line);
         }
+    });
+}
+
+// Sending notices to all connected clients.
+function sendGeneralNotice(noticeText) {
+    ircClients.forEach(function(socket) {
+
+        const notice = `:${configuration.ircServer.hostname} NOTICE ${socket.nickname} :${noticeText}\r\n`
+        socket.write(notice);
     });
 }
 
