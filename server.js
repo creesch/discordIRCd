@@ -16,7 +16,6 @@ const Discord = require("discord.js");
 // Object which will contain channel information.
 let ircDetails = { 
     DMserver: {
-        nicknameUniqueCounter: 0,
         lastPRIVMSG: []
     }
 };
@@ -37,11 +36,6 @@ const maxLineLength = 510;
 // Generic functions
 //
 
-
-
-function isEmptyObj(obj) {
-    return (Object.keys(obj).length === 0 && obj.constructor === Object);
-}
 // Function that parses irc messages. 
 // Shamelessly stolen from node-irc https://github.com/aredridel/node-ircd
 function parseMessage(line) {
@@ -74,21 +68,14 @@ function parseMessage(line) {
 
 // Returns a number based on the discord server that increases per call.
 // Used to make fairly sure nicknames on irc end up being unique after being scrubbed. 
-
-function giveIncrement(discordID) {
-    
-    ircDetails[discordID].nicknameUniqueCounter++;
-    return ircDetails[discordID].nicknameUniqueCounter;
-}
-
 // Make nicknames work for irc. 
-function ircNickname(discordDisplayName, discordID, botuser) {
+function ircNickname(discordDisplayName, botuser, discriminator) {
     const replaceRegex = /[^a-zA-Z0-9_\\[\]\{\}\^`\|]/g;
     const shortenRegex = /_{1,}/g;
 
     if (replaceRegex.test(discordDisplayName)) {
         
-        let newDisplayname = `${discordDisplayName.replace(replaceRegex, '_')}${giveIncrement(discordID)}`;
+        let newDisplayname = `${discordDisplayName.replace(replaceRegex, '_')}${discriminator}`;
         newDisplayname = newDisplayname.replace(shortenRegex, '_');
         
         return botuser ? `${newDisplayname}[BOT]` : newDisplayname;
@@ -120,8 +107,9 @@ function parseDiscordLine(line, discordID) {
             const memberObject = discordClient.guilds.get(discordID).members.get(userID);
             const displayName = memberObject.displayName;
             const isBot = memberObject.user.bot;
+            const discriminator = memberObject.user.discriminator;
 
-            const userName = ircNickname(displayName, discordID, isBot);
+            const userName = ircNickname(displayName, isBot, discriminator);
             const replaceRegex = new RegExp(mention, 'g');
             if (userName) {
                 line = line.replace(replaceRegex, `@${userName}`);
@@ -240,7 +228,6 @@ discordClient.on('ready', function() {
 
                 if (!ircDetails.hasOwnProperty(guildID)) {
                     ircDetails[guildID] = {
-                        nicknameUniqueCounter: 0,
                         lastPRIVMSG: []
                     };
                 }
@@ -374,7 +361,9 @@ discordClient.on('guildMemberRemove', function(GuildMember) {
         console.log('guildMemberRemove');
         const guildID = GuildMember.guild.id;
         const isBot = GuildMember.user.bot;
-        const ircDisplayName = ircNickname(GuildMember.displayName, guildID, isBot);
+        const discriminator = GuildMember.user.discriminator;
+
+        const ircDisplayName = ircNickname(GuildMember.displayName, isBot, discriminator);
         guildMemberNoMore(guildID, ircDisplayName, 'User removed');
     }
 });
@@ -384,7 +373,9 @@ discordClient.on('presenceUpdate', function(oldMember, newMember) {
 
         const guildID = newMember.guild.id;
         const isBot = newMember.user.bot;
-        const ircDisplayName = ircNickname(newMember.displayName, guildID, isBot);
+        const discriminator = newMember.user.discriminator;
+
+        const ircDisplayName = ircNickname(newMember.displayName, isBot, discriminator);
         const oldPresenceState = oldMember.presence.status;
         const newPresenceState = newMember.presence.status;
 
@@ -410,8 +401,9 @@ discordClient.on('guildMemberUpdate', function(oldMember, newMember) {
         const guildID = newMember.guild.id;
         const oldIsBot = oldMember.user.bot;
         const newIsBot = newMember.user.bot;
-        const oldIrcDisplayName = ircNickname(oldMember.displayName, guildID, oldIsBot);
-        const newIrcDisplayName = ircNickname(newMember.displayName, guildID, newIsBot);
+        const discriminator = newMember.user.discriminator;
+        const oldIrcDisplayName = ircNickname(oldMember.displayName, oldIsBot, discriminator);
+        const newIrcDisplayName = ircNickname(newMember.displayName, newIsBot, discriminator);
         const newDiscordDisplayName = newMember.displayName;
 
         if (oldIrcDisplayName !== newIrcDisplayName) {
@@ -431,7 +423,8 @@ discordClient.on('guildMemberAdd', function(GuildMember) {
         console.log('guildMemberAdd');
         const guildID = GuildMember.guild.id;
         const isBot = GuildMember.user.bot;
-        const ircDisplayName = ircNickname(GuildMember.displayName, guildID, isBot);
+        const discriminator = GuildMember.user.discriminator;
+        const ircDisplayName = ircNickname(GuildMember.displayName, isBot, discriminator);
         guildMemberCheckChannels(guildID, ircDisplayName, GuildMember);
     }
 });
@@ -443,7 +436,8 @@ discordClient.on('message', function(msg) {
         const discordServerId = msg.guild.id;
         const authorDisplayName = msg.member.displayName;
         const isBot = msg.author.bot;
-        const authorIrcName = ircNickname(authorDisplayName, discordServerId, isBot);
+        const discriminator = msg.author.discriminator;
+        const authorIrcName = ircNickname(authorDisplayName, isBot, discriminator);
         const channelName = msg.channel.name;
 
         // Only act on text channels and if the user has joined them in irc. 
@@ -489,7 +483,7 @@ discordClient.on('message', function(msg) {
             }
 
             if (msg.mentions.channels.array().length > 0) {
-                for (let channel in ircDetails[guildID]) {
+                for (let channel in ircDetails[discordServerId]) {
                     if (ircDetails[discordServerId].hasOwnProperty(channel) && ircDetails[discordServerId][channel].joined) {
                         if (msg.isMentioned(channel)) {
                             memberMentioned = true;
@@ -503,7 +497,7 @@ discordClient.on('message', function(msg) {
             }
 
             if (memberMentioned) {
-                messageArray.push(`You are mentioned: ${ownNickname}`)
+                messageArray.push(`You are mentioned: ${ownNickname}`);
             }
 
             messageArray.forEach(function(line) {
@@ -512,7 +506,7 @@ discordClient.on('message', function(msg) {
                     const messageTemplateLength = messageTemplate.length;
                     const remainingLength = maxLineLength - messageTemplateLength;
 
-                    const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g')
+                    const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g');
 
                     const linesArray = line.match(matchRegex) || [];
 
@@ -532,17 +526,31 @@ discordClient.on('message', function(msg) {
     if (ircClients.length > 0 && msg.channel.type === 'dm')  {
         const discordServerId = 'DMserver';
         const authorDisplayName = msg.author.username;
-        const isBot = msg.author.bot;
-        const authorIrcName = ircNickname(authorDisplayName, discordServerId, isBot);
+        const authorIsBot = msg.author.bot;
+        const authorDiscriminator = msg.author.discriminator;
+        const authorIrcName = ircNickname(authorDisplayName, authorIsBot, authorDiscriminator);
+
         const recipientIsBot = msg.channel.recipient.bot;
-        const recipient = ircNickname(msg.channel.recipient.username, discordServerId, recipientIsBot);
+        const recipientDiscriminator = msg.channel.recipient.discriminator;
+        const recipient = ircNickname(msg.channel.recipient.username, recipientIsBot, recipientDiscriminator);
         let ownNickname;
+
+        
 
         ircClients.forEach(function(socket) {
             if (socket.discordid === discordServerId) {
                 ownNickname = socket.nickname;
             }
         });
+
+
+
+        let messageTemplate;
+        if (authorIrcName === ownNickname) {
+            messageTemplate = `:${authorIrcName}!${msg.author.id}@whatever PRIVMSG ${recipient} :`;
+        } else {
+            messageTemplate = `:${authorIrcName}!${msg.author.id}@whatever PRIVMSG ${ownNickname} :`;
+        }
 
         // IRC does not handle newlines. So we split the message up per line and send them seperatly.
         const messageArray = msg.content.split(/\r?\n/);
@@ -558,18 +566,13 @@ discordClient.on('message', function(msg) {
         }
 
         messageArray.forEach(function(line) {
-                let messageTemplate;
-                if (authorIrcName === ownNickname) {
-                    messageTemplate = `:${authorIrcName}!${msg.author.id}@whatever PRIVMSG ${recipient} :`;
-                } else {
-                    messageTemplate = `:${authorIrcName}!${msg.author.id}@whatever PRIVMSG ${ownNickname} :`;
-                }
+
 
 
                 const messageTemplateLength = messageTemplate.length;
                 const remainingLength = maxLineLength - messageTemplateLength;
 
-                const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g')
+                const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g');
 
                 const linesArray = line.match(matchRegex) || [];
 
@@ -610,7 +613,8 @@ function joinCommand(channel, discordID) {
 
         channelContent.members.array().forEach(function(member) {
             const isBot = member.user.bot;
-            const displayMember = ircNickname(member.displayName, discordID, isBot);
+            const discriminator = member.user.discriminator;   
+            const displayMember = ircNickname(member.displayName, isBot, discriminator);
 
             if (member.presence.status === 'online' || member.presence.status === 'idle' || member.presence.status === 'dnd') {
                 ircDetails[discordID][channel].members[displayMember] = {
@@ -714,6 +718,33 @@ function partCommand(channel, discordID) {
     }
 }
 
+function getDiscordUserFromIRC(recipient, discordID) {
+    let returnmember;
+
+    if (discordID === 'DMserver') {
+        discordClient.users.array().forEach(function(user){
+            const isBot = user.bot;
+            const discriminator = user.discriminator;   
+            const displayMember = ircNickname(user.username, isBot, discriminator);
+
+            if (displayMember === recipient) {
+                returnmember = user;
+            }
+        });
+    } else {
+        discordClient.guilds.get(discordID).members.array().forEach(function(member){
+            const isBot = member.user.bot;
+            const discriminator = member.user.discriminator;   
+            const displayMember = ircNickname(member.displayName, isBot, discriminator);
+
+            if (displayMember === recipient) {
+                returnmember = member;
+            }
+        });
+    }
+    return returnmember;
+}
+
 //
 // Irc Related functionality.
 //
@@ -768,7 +799,8 @@ let ircServer = net.createServer(function(socket) {
                     // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
                     if (socket.discordid === 'DMserver') {
                         const newuser = discordClient.user.username;
-                        const newNickname = ircNickname(newuser, socket.discordid, false);
+                        const discriminator = discordClient.user.discriminator; 
+                        const newNickname = ircNickname(newuser, false, discriminator);
 
                         ircDetails[socket.discordid]['discordDisplayName'] = newuser;
                         ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
@@ -788,7 +820,8 @@ let ircServer = net.createServer(function(socket) {
                     } else if (discordClient.guilds.get(socket.discordid)) {
                         discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
                             const newuser = guildMember.displayName;
-                            const newNickname = ircNickname(newuser, socket.discordid, false);
+                            const discriminator = discordClient.user.discriminator;
+                            const newNickname = ircNickname(newuser, false, discriminator);
 
                             ircDetails[socket.discordid]['discordDisplayName'] = newuser;
                             ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
@@ -839,16 +872,43 @@ let ircServer = net.createServer(function(socket) {
                         });
                         break;
                     case 'PRIVMSG':
-                        console.log('Parsed line', parsedLine);
-                        const channelName = parsedLine.params[0].substring(1);
-                        const sendLine = parseIRCLine(parsedLine.params[1], socket.discordid, channelName);
+                        const recipient = parsedLine.params[0];
+                       
+                        if (recipient.startsWith('#')) {
+                            const channelName = recipient.substring(1);
+                            const sendLine = parseIRCLine(parsedLine.params[1], socket.discordid, channelName);
 
-                        if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
-                            ircDetails[socket.discordid].lastPRIVMSG.shift();
+                            if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
+                                ircDetails[socket.discordid].lastPRIVMSG.shift();
+                            }
+
+                            ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
+                            discordClient.channels.get(ircDetails[socket.discordid][channelName].id).sendMessage(sendLine);
+                        } else {
+                            const recipientUser = getDiscordUserFromIRC(recipient, socket.discordid);
+                            const sendLine = parsedLine.params[1];
+                            recipientUser.sendMessage(sendLine);
+
+                            ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
+                            if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
+                                ircDetails[socket.discordid].lastPRIVMSG.shift();
+                            }
+
+                            if (socket.discordid !== 'DMserver') {
+                                const messageTemplate = `:${socket.nickname}!${discordClient.user.id}@whatever PRIVMSG ${recipient} :PM Send: Note that replies will not arrive here but on the PM server\r\n`;
+                                sendToIRC(socket.discordid, messageTemplate);
+                            } 
+                            if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
+                                ircDetails[socket.discordid].lastPRIVMSG.shift();
+                            }
+
+
+
+
+                            
                         }
+                        
 
-                        ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
-                        discordClient.channels.get(ircDetails[socket.discordid][channelName].id).sendMessage(sendLine);
                         break;
                     case 'QUIT':
                         for (let channel in ircDetails[socket.discordid]) {
@@ -861,6 +921,7 @@ let ircServer = net.createServer(function(socket) {
                     case 'PING':
                         socket.write(`:${configuration.ircServer.hostname} PONG ${configuration.ircServer.hostname} :${socket.pongcount}\r\n`);
                         socket.pongcount = socket.pongcount + 1;
+                        break;
                     case 'LIST':
                         listCommand(socket.discordid);
 
@@ -891,7 +952,7 @@ function sendToIRC(discordServerId, line) {
 function sendGeneralNotice(noticeText) {
     ircClients.forEach(function(socket) {
 
-        const notice = `:${configuration.ircServer.hostname} NOTICE ${socket.nickname} :${noticeText}\r\n`
+        const notice = `:${configuration.ircServer.hostname} NOTICE ${socket.nickname} :${noticeText}\r\n`;
         socket.write(notice);
     });
 }

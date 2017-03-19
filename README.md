@@ -17,7 +17,12 @@ It also has been tested somewhat with Hexchat.
 - Connect with your ircclient to the server at the given adress with the following details: 
     - Username: The username defined in config.js, basically acts as a password. 
     - Server password: The id of the discord server you want to connect to. 
-- Join the channels you want. 
+- Join the channels you want.
+
+### Sending and receiving private messages. 
+Discord doesn't send private messages based on the server. In order to work around that discordIRCd provides an extra server that is soley used for sending and receiving private messages. To join it it use the server password `DMserver`. 
+
+Private conversation can be iniated from any server but will be automatically taken up by the private message server. 
 
 ## Features
 
