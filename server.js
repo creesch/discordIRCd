@@ -174,13 +174,13 @@ discordClient.on('ready', function() {
 
     console.log(`Logged in as ${discordClient.user.username}!`);
 
-    
+
     // Lets grab some basic information we will need eventually. 
     // But only do so if this is the first time connecting. 
     if (discordFirstConnection) {
-        discordFirstConnection = false; 
-    
-        
+        discordFirstConnection = false;
+
+
         discordClient.channels.array().forEach(function(channel) {
             // Of course only for channels. 
             if (channel.type === 'text') {
@@ -381,12 +381,12 @@ discordClient.on('message', function(msg) {
         const authorDisplayName = msg.member.displayName;
         const authorIrcName = ircNickname(authorDisplayName);
         const channelName = msg.channel.name;
-        
+
         // Only act on text channels and if the user has joined them in irc. 
 
         if (msg.channel.type === 'text' && channelObject[discordServerId][channelName].joined) {
             let ownNickname;
-            
+
             ircClients.forEach(function(socket) {
                 if (socket.discordid === discordServerId) {
                     ownNickname = socket.nickname;
@@ -400,37 +400,37 @@ discordClient.on('message', function(msg) {
             // IRC does not handle newlines. So we split the message up per line and send them seperatly.
             const messageArray = msg.content.split(/\r?\n/);
 
-            
+
 
             const attachmentArray = msg.attachments.array();
             if (attachmentArray.length > 0) {
                 attachmentArray.forEach(function(attachment) {
                     const filename = attachment.filename;
-                    const url = attachment.url; 
+                    const url = attachment.url;
                     const attachmentLine = `${filename}: ${url}`;
                     messageArray.push(attachmentLine);
                 });
             }
 
             let memberMentioned = false;
-            
+
             const ownGuildMember = discordClient.guilds.get(discordServerId).members.get(discordClient.user.id);
 
             if (msg.mentions.users.array().length > 0) {
                 if (msg.isMentioned(ownGuildMember)) {
                     memberMentioned = true;
                 }
-            } 
+            }
 
             if (msg.mentions.roles.array().length > 0) {
-                ownGuildMember.roles.array().forEach(function(role){
+                ownGuildMember.roles.array().forEach(function(role) {
                     if (msg.isMentioned(role)) {
                         memberMentioned = true;
                     }
                 });
 
-            } 
-            
+            }
+
             if (msg.mentions.channels.array().length > 0) {
                 for (let channel in channelObject[guildID]) {
                     if (channelObject[discordServerId].hasOwnProperty(channel) && channelObject[discordServerId][channel].joined) {
@@ -439,13 +439,13 @@ discordClient.on('message', function(msg) {
                         }
                     }
                 }
-            } 
-            
+            }
+
             if (msg.mentions.everyone) {
                 memberMentioned = true;
             }
 
-            if(memberMentioned) {
+            if (memberMentioned) {
                 messageArray.push(`You are mentioned: ${ownNickname}`)
             }
 
@@ -464,9 +464,7 @@ discordClient.on('message', function(msg) {
 });
 
 // Join command given, let's join the channel. 
-chatEmitter.on('joinCommand', function(details) {
-    const channel = details.channel;
-    const discordID = details.discordID;
+function joinCommand(channel, discordID) {
     let members = '';
     const nickname = channelObject[discordID].ircDisplayName;
 
@@ -530,8 +528,34 @@ chatEmitter.on('joinCommand', function(details) {
     } else {
         sendToIRC(discordID, `:${configuration.ircServer.hostname} 473 ${nickname} #${channel} :Cannot join channel\r\n`);
     }
-});
+}
 
+// List command, let's give back a list of channels.
+function listCommand(discordID) {
+    const nickname = channelObject[discordID].ircDisplayName;
+    const channels = discordClient.guilds.get(discordID).channels.array();
+    let listResponse = [`:${configuration.ircServer.hostname} 321 ${nickname} Channel :Users Name\r\n`];
+
+    channels.forEach(function(channel) {
+        if (channel.type === 'text') {
+            const channelname = channel.name,
+                memberCount = channel.members.array().length,
+                channeltopic = channel.topic;
+
+            const channelDetails = `:${configuration.ircServer.hostname} 322 ${nickname} #${channelname} ${memberCount} :${channeltopic}\r\n`;
+            listResponse.push(channelDetails);
+        }
+    });
+
+    const endlist = `:${configuration.ircServer.hostname} 323 ${nickname} :End of channel list.\r\n`;
+
+    listResponse.push(endlist);
+
+    listResponse.forEach(function(line) {
+        sendToIRC(discordID, line);
+    });
+
+}
 
 //
 // Irc Related functionality.
@@ -621,10 +645,7 @@ let ircServer = net.createServer(function(socket) {
                         const joinChannels = parsedLine.params[0].split(',');
 
                         joinChannels.forEach(function(channel) {
-                            chatEmitter.emit('joinCommand', {
-                                channel: channel.substring(1),
-                                discordID: socket.discordid
-                            });
+                            joinCommand(channel.substring(1), socket.discordid);
                         });
 
                         break;
@@ -638,9 +659,10 @@ let ircServer = net.createServer(function(socket) {
                         socket.end();
                         break;
                     case 'PING':
-                        
                         socket.write(`:${configuration.ircServer.hostname} PONG ${configuration.ircServer.hostname} :${socket.pongcount}\r\n`);
-                        socket.pongcount = socket.pongcount+1;
+                        socket.pongcount = socket.pongcount + 1;
+                    case 'LIST':
+                        listCommand(socket.discordid);
 
                 }
             }
