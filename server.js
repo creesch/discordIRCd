@@ -80,7 +80,7 @@ function giveIncrement(discordID) {
 }
 
 // Make nicknames work for irc. 
-function ircNickname(discordDisplayName, discordID) {
+function ircNickname(discordDisplayName, discordID, botuser) {
     const replaceRegex = /[^a-zA-Z0-9_\\[\]\{\}\^`\|]/g;
     const shortenRegex = /_{1,}/g;
 
@@ -89,10 +89,10 @@ function ircNickname(discordDisplayName, discordID) {
         let newDisplayname = `${discordDisplayName.replace(replaceRegex, '_')}${giveIncrement(discordID)}`;
         newDisplayname = newDisplayname.replace(shortenRegex, '_');
         
-        return newDisplayname;
+        return botuser ? `${newDisplayname}[BOT]` : newDisplayname;
 
     } else {
-        return discordDisplayName;
+        return botuser ? `${discordDisplayName}[BOT]` : discordDisplayName;
     }
 
 
@@ -115,7 +115,11 @@ function parseDiscordLine(line, discordID) {
     if (mentionFound) {
         mentionFound.forEach(function(mention) {
             const userID = mention.replace(/<@!?(\d{1,}?)>/, '$1');
-            const userName = ircNickname(discordClient.guilds.get(discordID).members.get(userID).displayName, discordID);
+            const memberObject = discordClient.guilds.get(discordID).members.get(userID);
+            const displayName = memberObject.displayName;
+            const isBot = memberObject.user.bot;
+
+            const userName = ircNickname(displayName, discordID, isBot);
             const replaceRegex = new RegExp(mention, 'g');
             if (userName) {
                 line = line.replace(replaceRegex, `@${userName}`);
@@ -349,7 +353,8 @@ discordClient.on('guildMemberRemove', function(GuildMember) {
     if (ircClients.length > 0) {
         console.log('guildMemberRemove');
         const guildID = GuildMember.guild.id;
-        const ircDisplayName = ircNickname(GuildMember.displayName, guildID);
+        const isBot = GuildMember.user.bot;
+        const ircDisplayName = ircNickname(GuildMember.displayName, guildID, isBot);
         guildMemberNoMore(guildID, ircDisplayName, 'User removed');
     }
 });
@@ -358,7 +363,8 @@ discordClient.on('presenceUpdate', function(oldMember, newMember) {
     if (ircClients.length > 0) {
 
         const guildID = newMember.guild.id;
-        const ircDisplayName = ircNickname(newMember.displayName, guildID);
+        const isBot = newMember.user.bot;
+        const ircDisplayName = ircNickname(newMember.displayName, guildID, isBot);
         const oldPresenceState = oldMember.presence.status;
         const newPresenceState = newMember.presence.status;
 
@@ -382,8 +388,10 @@ discordClient.on('guildMemberUpdate', function(oldMember, newMember) {
     if (ircClients.length > 0) {
         console.log('guildMemberUpdate');
         const guildID = newMember.guild.id;
-        const oldIrcDisplayName = ircNickname(oldMember.displayName, guildID);
-        const newIrcDisplayName = ircNickname(newMember.displayName, guildID);
+        const oldIsBot = oldMember.user.bot;
+        const newIsBot = newMember.user.bot;
+        const oldIrcDisplayName = ircNickname(oldMember.displayName, guildID, oldIsBot);
+        const newIrcDisplayName = ircNickname(newMember.displayName, guildID, newIsBot);
         const newDiscordDisplayName = newMember.displayName;
 
         if (oldIrcDisplayName !== newIrcDisplayName) {
@@ -402,7 +410,8 @@ discordClient.on('guildMemberAdd', function(GuildMember) {
     if (ircClients.length > 0) {
         console.log('guildMemberAdd');
         const guildID = GuildMember.guild.id;
-        const ircDisplayName = ircNickname(GuildMember.displayName, guildID);
+        const isBot = GuildMember.user.bot;
+        const ircDisplayName = ircNickname(GuildMember.displayName, guildID, isBot);
         guildMemberCheckChannels(guildID, ircDisplayName, GuildMember);
     }
 });
@@ -413,7 +422,8 @@ discordClient.on('message', function(msg) {
     if (ircClients.length > 0) {
         const discordServerId = msg.guild.id;
         const authorDisplayName = msg.member.displayName;
-        const authorIrcName = ircNickname(authorDisplayName, discordServerId);
+        const isBot = msg.author.bot;
+        const authorIrcName = ircNickname(authorDisplayName, discordServerId, isBot);
         const channelName = msg.channel.name;
 
         // Only act on text channels and if the user has joined them in irc. 
@@ -514,7 +524,8 @@ function joinCommand(channel, discordID) {
 
 
         channelContent.members.array().forEach(function(member) {
-            const displayMember = ircNickname(member.displayName, discordID);
+            const isBot = member.user.bot;
+            const displayMember = ircNickname(member.displayName, discordID, isBot);
 
             if (member.presence.status === 'online' || member.presence.status === 'idle' || member.presence.status === 'dnd') {
                 ircDetails[discordID][channel].members[displayMember] = {
@@ -656,7 +667,7 @@ let ircServer = net.createServer(function(socket) {
                     // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
                     discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
                         const newuser = guildMember.displayName;
-                        const newNickname = ircNickname(newuser, socket.discordid);
+                        const newNickname = ircNickname(newuser, socket.discordid, false);
 
                         ircDetails[socket.discordid]['discordDisplayName'] = newuser;
                         ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
