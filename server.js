@@ -69,7 +69,7 @@ function parseMessage(line) {
 
 // Make nicknames work for irc. 
 function ircNickname(discordDisplayName) {
-    return discordDisplayName.replace(/[^a-zA-Z0-9а-я_\\[\]\{\}\^`\|]/g, '_');
+    return discordDisplayName.replace(/[^a-zA-Z0-9_\\[\]\{\}\^`\|]/g, '_');
 }
 
 
@@ -379,6 +379,16 @@ discordClient.on('message', function(msg) {
 
             // IRC does not handle newlines. So we split the message up per line and send them seperatly.
             const messageArray = msg.content.split(/\r?\n/);
+
+            const attachmentArray = msg.attachments.array();
+            if (attachmentArray.length > 0) {
+                attachmentArray.forEach(function(attachment) {
+                    const filename = attachment.filename;
+                    const url = attachment.url; 
+                    const attachmentLine = `${filename}: ${url}`;
+                    messageArray.push(attachmentLine);
+                });
+            }
 
             messageArray.forEach(function(line) {
                 // Trying to prevent messages from irc echoing back and showing twice.
