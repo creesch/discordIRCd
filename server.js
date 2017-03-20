@@ -134,11 +134,11 @@ function parseDiscordLine(line, discordID) {
     }
 
     // Channels are also a thing!. 
-    const mentionChannelRegex = /(<@#\d{1,}?>)/g;
+    const mentionChannelRegex = /(<#\d{1,}?>)/g;
     const mentionChannelFound = line.match(mentionChannelRegex);
     if (mentionChannelFound) {
         mentionChannelFound.forEach(function(mention) {
-            const channelID = mention.replace(/<@#(\d{1,}?)>/, '$1');
+            const channelID = mention.replace(/<#(\d{1,}?)>/, '$1');
             const channelObject = discordClient.guilds.get(discordID).channels.get(channelID);    
 
             const replaceRegex = new RegExp(mention, 'g');
