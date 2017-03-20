@@ -811,7 +811,7 @@ let ircServer = net.createServer(function(socket) {
                 // We are abusing some irc functionality here to add a tiny bit of security. 
                 // The username the ircclient gives must match with that in the configuration.
                 // If the username is correct and the discordId can be found we are in bussiness. 
-                if ((username === configuration.ircServer.username || usernameAlternative === configuration.ircServer.username) && ircDetails[socket.discordid]) {
+                if (username === configuration.ircServer.username || usernameAlternative === configuration.ircServer.username) {
                     // Now we are connected let's change the nickname first to whatever it is on discord. 
 
                     // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
@@ -862,11 +862,13 @@ let ircServer = net.createServer(function(socket) {
                     } else {
                         // Things are not working out, let's end this. 
                         socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
+                         console.log('no 1')
                         socket.end();
                     }
 
                 } else {
                     // Things are not working out, let's end this. 
+                    console.log('no 2')
                     socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
                     socket.end();
                 }
