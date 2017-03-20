@@ -287,7 +287,7 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
             //Let's check the discord channel. 
             let discordMemberArray = discordClient.guilds.get(guildID).channels.get(channelID).members.array();
             discordMemberArray.forEach(function(discordMember) {
-                if (guildMember.displayName === discordMember.displayName && guildMember.presence.status !== 'offline') {
+                if (guildMember.displayName === discordMember.displayName && (guildMember.presence.status !== 'offline' || configuration.showOfflineUsers)) {
                     isInDiscordChannel = true;
                 }
             });
@@ -311,8 +311,13 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
                 console.log(`User ${ircDisplayName} joined ${channel}`);
                 sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever JOIN #${channel}\r\n`);
                 if (guildMember.presence === 'idle' || guildMember.presence === 'dnd') {
-                    console.log(`User ${ircDisplayName} is back`);
+                    console.log(`User ${ircDisplayName} is away`);
                     sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Away\r\n`);
+                }
+                // Unlikely to happen, but just to be sure.
+                if (guildMember.presence === 'offline' && configuration.showOfflineUsers) {
+                    console.log(`User ${ircDisplayName} is away`);
+                    sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Offline\r\n`);
                 }
             }
 
@@ -381,10 +386,12 @@ discordClient.on('presenceUpdate', function(oldMember, newMember) {
 
         // console.log(`presenceUpdate: ${ircDisplayName}  ${oldPresenceState} ->  ${newPresenceState}`);
 
-        if (oldPresenceState === 'offline') {
+        if (oldPresenceState === 'offline' && !configuration.showOfflineUsers) {
             guildMemberCheckChannels(guildID, ircDisplayName, newMember);
-        } else if (newPresenceState === 'offline') {
+        } else if (newPresenceState === 'offline' && !configuration.showOfflineUsers) {
             guildMemberNoMore(guildID, ircDisplayName, 'User gone offline');
+        } else if (newPresenceState === 'offline' && configuration.showOfflineUsers) {
+            sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Offline\r\n`);
         } else if (newPresenceState === 'dnd') {
             sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Away\r\n`);
         } else if (newPresenceState === 'idle') {
@@ -616,7 +623,11 @@ function joinCommand(channel, discordID) {
             const discriminator = member.user.discriminator;   
             const displayMember = ircNickname(member.displayName, isBot, discriminator);
 
-            if (member.presence.status === 'online' || member.presence.status === 'idle' || member.presence.status === 'dnd') {
+            if (member.presence.status === 'online' || 
+            member.presence.status === 'idle' || 
+            member.presence.status === 'dnd' || 
+            (member.presence.status === 'offline' && configuration.showOfflineUsers)) {
+
                 ircDetails[discordID][channel].members[displayMember] = {
                     discordName: member.displayName,
                     discordState: member.presence.status,
@@ -672,7 +683,7 @@ function joinCommand(channel, discordID) {
 
                     let member = ircDetails[discordID][channel].members[key];
                     let nickname = member.ircNick;
-                    if (member.discordState === 'idle' || member.discordState === 'dnd') {
+                    if (member.discordState === 'idle' || member.discordState === 'dnd' || (member.discordState === 'offline' && configuration.showOfflineUsers)) {
 
                         sendToIRC(discordID, `:${nickname}!${member.id}@whatever AWAY :Do not disturb\r\n`);
 
