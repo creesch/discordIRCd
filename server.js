@@ -541,7 +541,7 @@ discordClient.on('message', function(msg) {
             }
 
             if (memberMentioned) {
-                messageArray.push(`You are mentioned: ${ownNickname}`);
+                messageArray.unshift(`You are mentioned: ${ownNickname}`);
             }
 
             messageArray.forEach(function(line) {
