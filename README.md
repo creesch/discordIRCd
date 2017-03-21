@@ -1,4 +1,4 @@
-![#discordirc on irc.snoonet.org](https://img.shields.io/badge/irc-%23discordircd-green.svg) on irc.snoonet.org. 
+\#discordirc on irc.snoonet.org. 
 
 # discordIRCd
 Allows you to connect to discord with your irc client.
