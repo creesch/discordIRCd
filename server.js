@@ -741,6 +741,7 @@ function joinCommand(channel, discordID) {
 
 // List command, let's give back a list of channels.
 function listCommand(discordID) {
+    if (discordID === 'DMserver') return;
     const nickname = ircDetails[discordID].ircDisplayName;
     const channels = discordClient.guilds.get(discordID).channels.array();
     let listResponse = [`:${configuration.ircServer.hostname} 321 ${nickname} Channel :Users Name\r\n`];
