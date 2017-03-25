@@ -1,7 +1,7 @@
 \#discordirc on irc.snoonet.org. 
 
 # discordIRCd
-Allows you to connect to discord with your irc client.
+discordIRCd is a node.js application that allows you to connect to discord with your irc client.
 
 ![I really like the way I have it set up!](https://imgs.xkcd.com/comics/team_chat.png)  
 https://xkcd.com/1782/
@@ -33,10 +33,3 @@ Private conversation can be iniated from any server but will be automatically ta
 - Mentions are translated both ways. 
 - Basic discord markdown is parsed to irc formatting. 
 
-
-## TODO: 
-
-- Better authentication. 
-- Ton more discord compatibility. 
-- Channel topics don't always show up in IRCCloud.
-- Joining the same discord server with multiple clients causes some unexpected shared behavior. 
