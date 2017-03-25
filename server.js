@@ -517,9 +517,36 @@ discordClient.on('message', function(msg) {
             // Doesn't really matter socket we pick this from as long as it is connected to the discord server.
             let ownNickname = getSocketDetails(ircDetails[discordServerId].channels[channelName].joined[0]).nickname;
 
+            let messageContent = msg.content;
+            let memberMentioned = false;
+
+            const ownGuildMember = discordClient.guilds.get(discordServerId).members.get(discordClient.user.id);
+
+
+
+            if (msg.mentions.roles.array().length > 0) {
+                ownGuildMember.roles.array().forEach(function(role) {
+                    if (msg.isMentioned(role)) {
+                        memberMentioned = true;
+                    }
+                });
+
+            }
+
+            if (msg.mentions.everyone) {
+                memberMentioned = true;
+            }
+
+            if (memberMentioned) {
+                messageContent = `${ownNickname}: ${messageContent}`;
+            }
+
+
 
             // IRC does not handle newlines. So we split the message up per line and send them seperatly.
-            const messageArray = msg.content.split(/\r?\n/);
+            const messageArray = messageContent.split(/\r?\n/);
+
+
 
             const attachmentArray = msg.attachments.array();
             if (attachmentArray.length > 0) {
@@ -531,42 +558,7 @@ discordClient.on('message', function(msg) {
                 });
             }
 
-            let memberMentioned = false;
 
-            const ownGuildMember = discordClient.guilds.get(discordServerId).members.get(discordClient.user.id);
-
-            if (msg.mentions.users.array().length > 0) {
-                if (msg.isMentioned(ownGuildMember)) {
-                    memberMentioned = true;
-                }
-            }
-
-            if (msg.mentions.roles.array().length > 0) {
-                ownGuildMember.roles.array().forEach(function(role) {
-                    if (msg.isMentioned(role)) {
-                        memberMentioned = true;
-                    }
-                });
-
-            }
-
-            if (msg.mentions.channels.array().length > 0) {
-                for (let channel in ircDetails[discordServerId].channels) {
-                    if (ircDetails[discordServerId].channels.hasOwnProperty(channel) && ircDetails[discordServerId].channels[channel].joined) {
-                        if (msg.isMentioned(channel)) {
-                            memberMentioned = true;
-                        }
-                    }
-                }
-            }
-
-            if (msg.mentions.everyone) {
-                memberMentioned = true;
-            }
-
-            if (memberMentioned) {
-                messageArray.unshift(`You are mentioned: ${ownNickname}`);
-            }
 
             messageArray.forEach(function(line) {
 
@@ -584,7 +576,7 @@ discordClient.on('message', function(msg) {
                         const lineToSend = parseDiscordLine(sendLine, discordServerId);
                         const message = `${messageTemplate}${lineToSend}\r\n`;
 
-                        ircDetails[discordServerId][channelName].joined.forEach(function(socketID) {
+                        ircDetails[discordServerId].channels[channelName].joined.forEach(function(socketID) {
                             sendToIRC(discordServerId, message, socketID);
                         });
                     }
