@@ -517,6 +517,96 @@ discordClient.on('guildMemberAdd', function(GuildMember) {
     }
 });
 
+discordClient.on('channelCreate', function(newChannel) {
+    if(newChannel.type === 'text') {
+        const discordServerId = newChannel.guild.id;
+        ircDetails[discordServerId].channels[newChannel.name] = {
+            id: newChannel.id,
+            members: {},
+            topic: newChannel.topic || 'No topic',
+            joined: []
+        };
+    }
+});
+
+discordClient.on('channelDelete', function(deletedChannel) {
+    if(deletedChannel.type === 'text') {
+        const discordServerId = deletedChannel.guild.id;
+        if(ircDetails[discordServerId].channels[deletedChannel.name].joined.length > 0) {
+            const PartAlertMessage = `:discordIRCd!notReallyA@User PRIVMSG #${deletedChannel.name} :#${deletedChannel.name} has been deleted \r\n`;
+            sendToIRC(discordServerId, PartAlertMessage);
+            const joinedSockets = ircDetails[discordServerId].channels[deletedChannel.name].joined;
+
+            joinedSockets.forEach(function(socketID){
+                // First we inform the user in the old channelContent
+                partCommand(deletedChannel.name, discordServerId, socketID);
+            });
+
+
+        }
+
+        // Finally remove the channel from the list. 
+        delete ircDetails[discordServerId].channels[deletedChannel.name];
+    }
+});
+
+discordClient.on('channelUpdate', function(oldChannel, newChannel) {
+    const discordServerId = oldChannel.guild.id;
+    console.log('channel updated');
+    if(oldChannel.type === 'text') {
+        
+            if (oldChannel.name !== newChannel.name) {
+            console.log(`channel name changed from #${oldChannel.name} to #${newChannel.name}`);
+            ircDetails[discordServerId].channels[newChannel.name] = {
+                id: newChannel.id,
+                members: {},
+                topic: newChannel.topic || 'No topic',
+                joined: []
+            };
+
+            if(ircDetails[discordServerId].channels[oldChannel.name].joined.length > 0) {
+                const PartAlertMessage = `:discordIRCd!notReallyA@User PRIVMSG #${oldChannel.name} :#${oldChannel.name} has been renamed to #${newChannel.name} \r\n`;
+                sendToIRC(discordServerId, PartAlertMessage);
+                const joinedSockets = ircDetails[discordServerId].channels[oldChannel.name].joined;
+
+                joinedSockets.forEach(function(socketID){
+                    // First we inform the user in the old channelContent
+                    partCommand(oldChannel.name, discordServerId, socketID);
+                    joinCommand(newChannel.name, discordServerId, socketID);
+                });
+
+
+            }
+
+            // Delete the old one.
+            delete ircDetails[discordServerId].channels[oldChannel.name];
+        }
+    }
+
+    // Simple topic change. 
+    if (oldChannel.topic !== newChannel.topic) {
+        const topic = newChannel.topic || 'No topic';
+
+
+
+        ircClients.forEach(function(socket) {
+            if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[oldChannel.name].joined.indexOf(socket.ircid) > -1) {
+
+                const topicMSG = `:noboyknows!orCares@whatever TOPIC #${oldChannel.name} :${topic}\r\n`;
+
+                sendToIRC(discordServerId, topicMSG, socket.ircid);
+
+
+            }
+        });
+
+
+
+    }
+
+});
+
+
 
 // Processing received messages 
 discordClient.on('message', function(msg) {
@@ -748,7 +838,7 @@ function joinCommand(channel, discordID, socketID) {
         console.log(joinMSG);
         sendToIRC(discordID, joinMSG, socketID);
 
-        // For some reason the topic is not showing yet in the client...
+        // Setting the topic.
         const topicMSG = `:${configuration.ircServer.hostname} 332 ${nickname} #${channel} :${channelTopic}\r\n`;
         console.log(topicMSG);
         sendToIRC(discordID, topicMSG, socketID);
@@ -1131,7 +1221,7 @@ let ircServer = net.createServer(netOptions, function(socket) {
                         break;
                     case 'QUIT':
                         for (let channel in ircDetails[socket.discordid].channels) {
-                            if (ircDetails[socket.discordid].channels.hasOwnProperty(channel) && ircDetails[socket.discordid].channels[channel].indexOf(socket.ircid)) {
+                            if (ircDetails[socket.discordid].channels.hasOwnProperty(channel) && ircDetails[socket.discordid].channels[channel].joined.indexOf(socket.ircid) > 0) {
                                 const socketIndex = ircDetails[socket.discordid].channels[channel].joined.indexOf(socket.ircid);
                                 if (socketIndex > -1) {
                                     ircDetails[socket.discordid].channels[channel].joined.splice(socketIndex, 1);
