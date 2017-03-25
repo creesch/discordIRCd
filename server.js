@@ -14,7 +14,7 @@ const Discord = require("discord.js");
 //
 
 // Object which will contain channel information.
-let ircDetails = { 
+let ircDetails = {
     DMserver: {
         lastPRIVMSG: []
     }
@@ -74,10 +74,10 @@ function ircNickname(discordDisplayName, botuser, discriminator) {
     const shortenRegex = /_{1,}/g;
 
     if (replaceRegex.test(discordDisplayName)) {
-        
+
         let newDisplayname = `${discordDisplayName.replace(replaceRegex, '_')}${discriminator}`;
         newDisplayname = newDisplayname.replace(shortenRegex, '_');
-        
+
         return botuser ? `${newDisplayname}[BOT]` : newDisplayname;
 
     } else {
@@ -123,7 +123,7 @@ function parseDiscordLine(line, discordID) {
     if (mentionRoleFound) {
         mentionRoleFound.forEach(function(mention) {
             const roleID = mention.replace(/<@&(\d{1,}?)>/, '$1');
-            const roleObject = discordClient.guilds.get(discordID).roles.get(roleID);    
+            const roleObject = discordClient.guilds.get(discordID).roles.get(roleID);
 
             const replaceRegex = new RegExp(mention, 'g');
             if (roleObject) {
@@ -139,7 +139,7 @@ function parseDiscordLine(line, discordID) {
     if (mentionChannelFound) {
         mentionChannelFound.forEach(function(mention) {
             const channelID = mention.replace(/<#(\d{1,}?)>/, '$1');
-            const channelObject = discordClient.guilds.get(discordID).channels.get(channelID);    
+            const channelObject = discordClient.guilds.get(discordID).channels.get(channelID);
 
             const replaceRegex = new RegExp(mention, 'g');
             if (channelObject) {
@@ -159,21 +159,21 @@ function parseIRCLine(line, discordID, channel) {
     let mentionDiscordFound = line.match(mentionDiscordRegex);
     const mentionIrcRegex = /(^.{1,}?:)/g;
     let mentionIrcFound = line.match(mentionIrcRegex);
-    
+
     let mentionFound;
     if (mentionDiscordFound && mentionIrcFound) {
         mentionFound = mentionDiscordFound.concat(mentionIrcFound);
-    } else if(mentionDiscordFound) {
+    } else if (mentionDiscordFound) {
         mentionFound = mentionDiscordFound;
     } else {
         mentionFound = mentionIrcFound;
     }
-    
+
     if (mentionFound) {
         mentionFound.forEach(function(mention) {
             const regexDiscordMention = /@(.{1,}?)\s/;
             const regexIrcMention = /^(.{1,}?):/;
-            
+
             let userNickname;
 
             if (regexDiscordMention.mention) {
@@ -181,9 +181,9 @@ function parseIRCLine(line, discordID, channel) {
             } else {
                 userNickname = mention.replace(regexIrcMention, '$1');
             }
-            
-            if (ircDetails[discordID][channel].members.hasOwnProperty(userNickname)) {
-                const userID = ircDetails[discordID][channel].members[userNickname].id;
+
+            if (ircDetails[discordID].channels[channel].members.hasOwnProperty(userNickname)) {
+                const userID = ircDetails[discordID].channels[channel].members[userNickname].id;
                 const replaceRegex = new RegExp(mention, 'g');
 
                 line = line.replace(replaceRegex, `<@!${userID}> `);
@@ -265,12 +265,13 @@ discordClient.on('ready', function() {
 
                 if (!ircDetails.hasOwnProperty(guildID)) {
                     ircDetails[guildID] = {
-                        lastPRIVMSG: []
+                        lastPRIVMSG: [],
+                        channels: {}
                     };
                 }
-                ircDetails[guildID][channelName] = {
+                ircDetails[guildID].channels[channelName] = {
                     id: channelID,
-                    joined: false,
+                    joined: [],
                     topic: channelTopic
                 };
             }
@@ -293,18 +294,21 @@ function guildMemberNoMore(guildID, ircDisplayName, noMoreReason) {
     let found = false;
     // First we go over the channels. 
     for (let channel in ircDetails[guildID]) {
-        if (ircDetails[guildID].hasOwnProperty(channel) && ircDetails[guildID][channel].joined) {
+        if (ircDetails[guildID].channels.hasOwnProperty(channel) && ircDetails[guildID].channels[channel].joined.length > 0) {
 
-            let channelMembers = ircDetails[guildID][channel].members;
+            let channelMembers = ircDetails[guildID].channels[channel].members;
             // Within the channels we go over the members. 
             if (channelMembers.hasOwnProperty(ircDisplayName)) {
                 if (!found) {
-                    let memberDetails = ircDetails[guildID][channel].members[ircDisplayName];
+                    let memberDetails = ircDetails[guildID].channels[channel].members[ircDisplayName];
                     console.log(`User ${ircDisplayName} quit ${noMoreReason}`);
-                    sendToIRC(guildID, `:${ircDisplayName}!${memberDetails.id}@whatever QUIT :${noMoreReason}\r\n`);
+                    ircDetails[guildID].channels[channel].joined.forEach(function(socketID) {
+                        sendToIRC(guildID, `:${ircDisplayName}!${memberDetails.id}@whatever QUIT :${noMoreReason}\r\n`, socketID);
+                    });
+
                     found = true;
                 }
-                delete ircDetails[guildID][channel].members[ircDisplayName];
+                delete ircDetails[guildID].channels[channel].members[ircDisplayName];
             }
         }
     }
@@ -312,12 +316,12 @@ function guildMemberNoMore(guildID, ircDisplayName, noMoreReason) {
 
 function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
     // First we go over the channels. 
-    for (let channel in ircDetails[guildID]) {
-        if (ircDetails[guildID].hasOwnProperty(channel) && ircDetails[guildID][channel].joined) {
+    for (let channel in ircDetails[guildID].channels) {
+        if (ircDetails[guildID].channels.hasOwnProperty(channel) && ircDetails[guildID].channels[channel].joined.length > 0) {
             let isInDiscordChannel = false;
             let isCurrentlyInIRC = false;
 
-            let channelDetails = ircDetails[guildID][channel];
+            let channelDetails = ircDetails[guildID].channels[channel];
             let channelMembers = channelDetails.members;
             let channelID = channelDetails.id;
 
@@ -338,7 +342,7 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
 
             // If the user is in the discord channel but not irc we will add the user. 
             if (!isCurrentlyInIRC && isInDiscordChannel) {
-                ircDetails[guildID][channel].members[ircDisplayName] = {
+                ircDetails[guildID].channels[channel].members[ircDisplayName] = {
                     discordName: guildMember.displayName,
                     discordState: guildMember.presence.status,
                     ircNick: ircDisplayName,
@@ -346,23 +350,41 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
                 };
 
                 console.log(`User ${ircDisplayName} joined ${channel}`);
-                sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever JOIN #${channel}\r\n`);
-                if (guildMember.presence === 'idle' || guildMember.presence === 'dnd') {
-                    console.log(`User ${ircDisplayName} is away`);
-                    sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Away\r\n`);
-                }
-                // Unlikely to happen, but just to be sure.
-                if (guildMember.presence === 'offline' && configuration.showOfflineUsers) {
-                    console.log(`User ${ircDisplayName} is away`);
-                    sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Offline\r\n`);
-                }
+                ircDetails[guildID].channels[channel].joined.forEach(function(socketID) {
+                    sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever JOIN #${channel}\r\n`, socketID);
+
+                    const socketDetails = getSocketDetails(socketID);
+
+
+                    if (guildMember.presence === 'idle' && socketDetails.awayNotify) {
+                        console.log(`User ${ircDisplayName} is away: Idle`);
+                        sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Idle\r\n`, socketID);
+
+                    }
+
+                    if (guildMember.presence === 'dnd' && socketDetails.awayNotify) {
+                        console.log(`User ${ircDisplayName} is away: Do not disturb`);
+                        sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Do not disturb\r\n`, socketID);
+
+
+                    }
+                    // Unlikely to happen, but just to be sure.
+                    if (guildMember.presence === 'offline' && configuration.showOfflineUsers && socketDetails.awayNotify) {
+                        console.log(`User ${ircDisplayName} is offline`);
+                        sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Offline\r\n`, socketID);
+                    }
+                });
+
+
             }
 
             // If the user is currently in irc but not in the discord channel they have left the channel. 
-            if (isCurrentlyInIRC && !isInDiscordChannel) {                
-                console.log(`User ${ircDisplayName} left ${channel}`);
-                sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever PART #${channel}\r\n`);
-                delete ircDetails[guildID][channel].members[ircDisplayName];
+            if (isCurrentlyInIRC && !isInDiscordChannel) {
+                ircDetails[guildID].channels[channel].joined.forEach(function(socketID) {
+                    console.log(`User ${ircDisplayName} left ${channel}`);
+                    sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever PART #${channel}\r\n`, socketID);
+                    delete ircDetails[guildID].channels[channel].members[ircDisplayName];
+                });
             }
 
         }
@@ -374,9 +396,9 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
     let foundInChannels = false;
     let memberId;
     for (let channel in ircDetails[guildID]) {
-        if (ircDetails[guildID].hasOwnProperty(channel) && ircDetails[guildID][channel].joined) {
+        if (ircDetails[guildID].channels.hasOwnProperty(channel) && ircDetails[guildID].channels[channel].joined.length > 0) {
 
-            let channelDetails = ircDetails[guildID][channel];
+            let channelDetails = ircDetails[guildID].channels[channel];
             let channelMembers = channelDetails.members;
 
             // Within the channels we go over the members. 
@@ -385,8 +407,8 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
                 tempMember.displayName = newDiscordDisplayName;
                 tempMember.ircNick = newIrcDisplayName;
                 memberId = tempMember.id;
-                delete ircDetails[guildID][channel].members[oldIrcDisplayName];
-                ircDetails[guildID][channel].members[oldIrcDisplayName] = tempMember;
+                delete ircDetails[guildID].channels[channel].members[oldIrcDisplayName];
+                ircDetails[guildID].channels[channel].members[oldIrcDisplayName] = tempMember;
                 foundInChannels = true;
 
             }
@@ -394,7 +416,7 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
     }
     if (foundInChannels) {
         console.log(`Changing nickname ${oldIrcDisplayName} into ${newIrcDisplayName}`);
-        sendToIRC(guildID, `:${oldIrcDisplayName}!${memberId}@whatever NICK ${newIrcDisplayName}\r\n`);
+            sendToIRC(guildID, `:${oldIrcDisplayName}!${memberId}@whatever NICK ${newIrcDisplayName}\r\n`);
     }
 }
 
@@ -421,20 +443,25 @@ discordClient.on('presenceUpdate', function(oldMember, newMember) {
         const oldPresenceState = oldMember.presence.status;
         const newPresenceState = newMember.presence.status;
 
-        // console.log(`presenceUpdate: ${ircDisplayName}  ${oldPresenceState} ->  ${newPresenceState}`);
-
         if (oldPresenceState === 'offline' && !configuration.showOfflineUsers) {
             guildMemberCheckChannels(guildID, ircDisplayName, newMember);
         } else if (newPresenceState === 'offline' && !configuration.showOfflineUsers) {
             guildMemberNoMore(guildID, ircDisplayName, 'User gone offline');
-        } else if (newPresenceState === 'offline' && configuration.showOfflineUsers) {
-            sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Offline\r\n`);
-        } else if (newPresenceState === 'dnd') {
-            sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Away\r\n`);
-        } else if (newPresenceState === 'idle') {
-            sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Do not disturb\r\n`);
-        } else if (oldPresenceState !== 'offline' && newPresenceState === 'online') {
-            sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY\r\n`);
+        } else if (configuration.showOfflineUsers) {
+            ircClients.forEach(function(socket) {
+                if(socket.awayNotify) {
+                    // Technically we could just do socket.writeline for these. But for consistency we go through the sendToIRC function.
+                    if (newPresenceState === 'offline' && configuration.showOfflineUsers) {
+                        sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Offline\r\n`, socket.ircid);
+                    } else if (newPresenceState === 'dnd') {
+                        sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Do not disturb\r\n`, socket.ircid);
+                    } else if (newPresenceState === 'idle') {
+                        sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Idle\r\n`, socket.ircid);
+                    } else if (oldPresenceState !== 'offline' && newPresenceState === 'online') {
+                        sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY\r\n`, socket.ircid);
+                    }
+                }
+            });
         }
     }
 });
@@ -476,7 +503,7 @@ discordClient.on('guildMemberAdd', function(GuildMember) {
 
 // Processing received messages 
 discordClient.on('message', function(msg) {
-    if (ircClients.length > 0 && msg.channel.type === 'text')  {
+    if (ircClients.length > 0 && msg.channel.type === 'text') {
         const discordServerId = msg.guild.id;
         const authorDisplayName = msg.member.displayName;
         const isBot = msg.author.bot;
@@ -485,14 +512,11 @@ discordClient.on('message', function(msg) {
         const channelName = msg.channel.name;
 
         // Only act on text channels and if the user has joined them in irc. 
-        if (ircDetails[discordServerId][channelName].joined) {
-            let ownNickname;
+        if (ircDetails[discordServerId].channels[channelName].joined.length > 0) {
 
-            ircClients.forEach(function(socket) {
-                if (socket.discordid === discordServerId) {
-                    ownNickname = socket.nickname;
-                }
-            });
+            // Doesn't really matter socket we pick this from as long as it is connected to the discord server.
+            let ownNickname = getSocketDetails(ircDetails[discordServerId].channels[channelName].joined[0]).nickname;
+
 
             // IRC does not handle newlines. So we split the message up per line and send them seperatly.
             const messageArray = msg.content.split(/\r?\n/);
@@ -527,8 +551,8 @@ discordClient.on('message', function(msg) {
             }
 
             if (msg.mentions.channels.array().length > 0) {
-                for (let channel in ircDetails[discordServerId]) {
-                    if (ircDetails[discordServerId].hasOwnProperty(channel) && ircDetails[discordServerId][channel].joined) {
+                for (let channel in ircDetails[discordServerId].channels) {
+                    if (ircDetails[discordServerId].channels.hasOwnProperty(channel) && ircDetails[discordServerId].channels[channel].joined) {
                         if (msg.isMentioned(channel)) {
                             memberMentioned = true;
                         }
@@ -546,28 +570,31 @@ discordClient.on('message', function(msg) {
 
             messageArray.forEach(function(line) {
 
-                    const messageTemplate = `:${authorIrcName}!${msg.member.id}@whatever PRIVMSG #${channelName} :`;
-                    const messageTemplateLength = messageTemplate.length;
-                    const remainingLength = maxLineLength - messageTemplateLength;
+                const messageTemplate = `:${authorIrcName}!${msg.member.id}@whatever PRIVMSG #${channelName} :`;
+                const messageTemplateLength = messageTemplate.length;
+                const remainingLength = maxLineLength - messageTemplateLength;
 
-                    const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g');
+                const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g');
 
-                    const linesArray = line.match(matchRegex) || [];
+                const linesArray = line.match(matchRegex) || [];
 
-                    linesArray.forEach(function(sendLine) {
-                        // Trying to prevent messages from irc echoing back and showing twice.
-                        if (ircDetails[discordServerId].lastPRIVMSG.indexOf(sendLine) < 0)  {
-                            const lineToSend = parseDiscordLine(sendLine, discordServerId);
-                            const message = `${messageTemplate}${lineToSend}\r\n`;
-                            sendToIRC(discordServerId, message);
-                        }
-                    });
+                linesArray.forEach(function(sendLine) {
+                    // Trying to prevent messages from irc echoing back and showing twice.
+                    if (ircDetails[discordServerId].lastPRIVMSG.indexOf(sendLine) < 0) {
+                        const lineToSend = parseDiscordLine(sendLine, discordServerId);
+                        const message = `${messageTemplate}${lineToSend}\r\n`;
 
-                
+                        ircDetails[discordServerId][channelName].joined.forEach(function(socketID) {
+                            sendToIRC(discordServerId, message, socketID);
+                        });
+                    }
+                });
+
+
             });
         }
     }
-    if (ircClients.length > 0 && msg.channel.type === 'dm')  {
+    if (ircClients.length > 0 && msg.channel.type === 'dm') {
         const discordServerId = 'DMserver';
         const authorDisplayName = msg.author.username;
         const authorIsBot = msg.author.bot;
@@ -579,7 +606,7 @@ discordClient.on('message', function(msg) {
         const recipient = ircNickname(msg.channel.recipient.username, recipientIsBot, recipientDiscriminator);
         let ownNickname;
 
-        
+
 
         ircClients.forEach(function(socket) {
             if (socket.discordid === discordServerId) {
@@ -598,32 +625,32 @@ discordClient.on('message', function(msg) {
 
         // IRC does not handle newlines. So we split the message up per line and send them seperatly.
         const messageArray = msg.content.split(/\r?\n/);
-        
-        
-        
+
+
+
         messageArray.forEach(function(line) {
 
 
 
-                const messageTemplateLength = messageTemplate.length;
-                const remainingLength = maxLineLength - messageTemplateLength;
+            const messageTemplateLength = messageTemplate.length;
+            const remainingLength = maxLineLength - messageTemplateLength;
 
-                const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g');
+            const matchRegex = new RegExp(`[\\s\\S]{1,${remainingLength}}`, 'g');
 
-                const linesArray = line.match(matchRegex) || [];
+            const linesArray = line.match(matchRegex) || [];
 
-                linesArray.forEach(function(sendLine) {
-                    // Trying to prevent messages from irc echoing back and showing twice.
-                    if (ircDetails[discordServerId].lastPRIVMSG.indexOf(sendLine) < 0)  {
-                        const lineToSend = parseDiscordLine(sendLine, discordServerId);
-                        const message = `${messageTemplate}${lineToSend}\r\n`;
-                        sendToIRC(discordServerId, message);
-                    }
-                });
+            linesArray.forEach(function(sendLine) {
+                // Trying to prevent messages from irc echoing back and showing twice.
+                if (ircDetails[discordServerId].lastPRIVMSG.indexOf(sendLine) < 0) {
+                    const lineToSend = parseDiscordLine(sendLine, discordServerId);
+                    const message = `${messageTemplate}${lineToSend}\r\n`;
+                    sendToIRC(discordServerId, message);
+                }
+            });
 
-            
+
         });
-        
+
         const attachmentArray = msg.attachments.array();
         if (attachmentArray.length > 0) {
             attachmentArray.forEach(function(attachment) {
@@ -640,7 +667,7 @@ discordClient.on('message', function(msg) {
 });
 
 // Join command given, let's join the channel. 
-function joinCommand(channel, discordID) {
+function joinCommand(channel, discordID, socketID) {
     let members = '';
     let memberListLines = [];
     const nickname = ircDetails[discordID].ircDisplayName;
@@ -648,12 +675,12 @@ function joinCommand(channel, discordID) {
     const memberlistTemplateLength = memberlistTemplate.length;
 
 
-    if (ircDetails[discordID].hasOwnProperty(channel)) {
-        const channelProperties = ircDetails[discordID][channel];
+    if (ircDetails[discordID].channels.hasOwnProperty(channel)) {
+        const channelProperties = ircDetails[discordID].channels[channel];
         const channelContent = discordClient.channels.get(channelProperties.id);
 
-        ircDetails[discordID][channel].joined = true;
-        ircDetails[discordID][channel]['members'] = {};
+        ircDetails[discordID].channels[channel].joined.push(socketID);
+        ircDetails[discordID].channels[channel]['members'] = {};
         const channelTopic = channelProperties.topic;
 
 
@@ -661,15 +688,15 @@ function joinCommand(channel, discordID) {
 
         channelContent.members.array().forEach(function(member) {
             const isBot = member.user.bot;
-            const discriminator = member.user.discriminator;   
+            const discriminator = member.user.discriminator;
             const displayMember = ircNickname(member.displayName, isBot, discriminator);
 
-            if (member.presence.status === 'online' || 
-            member.presence.status === 'idle' || 
-            member.presence.status === 'dnd' || 
-            (member.presence.status === 'offline' && configuration.showOfflineUsers)) {
+            if (member.presence.status === 'online' ||
+                member.presence.status === 'idle' ||
+                member.presence.status === 'dnd' ||
+                (member.presence.status === 'offline' && configuration.showOfflineUsers)) {
 
-                ircDetails[discordID][channel].members[displayMember] = {
+                ircDetails[discordID].channels[channel].members[displayMember] = {
                     discordName: member.displayName,
                     discordState: member.presence.status,
                     ircNick: displayMember,
@@ -685,62 +712,76 @@ function joinCommand(channel, discordID) {
                     memberListLines.push(members);
                     members = displayMember;
                 }
-                
+
             }
         });
 
         memberListLines.push(members);
-        
+
 
         const joinMSG = `:${nickname} JOIN #${channel}\r\n`;
         console.log(joinMSG);
-        sendToIRC(discordID, joinMSG);
+        sendToIRC(discordID, joinMSG, socketID);
 
         // For some reason the topic is not showing yet in the client...
         const topicMSG = `:${configuration.ircServer.hostname} 332 ${nickname} #${channel} :${channelTopic}\r\n`;
         console.log(topicMSG);
-        sendToIRC(discordID, topicMSG);
+        sendToIRC(discordID, topicMSG, socketID);
 
         const todayDate = new Date();
         const seconds = todayDate.getTime() / 1000;
         const topicMSG2 = `:${configuration.ircServer.hostname} 333 ${nickname} #${channel} noboyknows!orCares@whatever ${seconds}\r\n`;
-        sendToIRC(discordID, topicMSG2);
+        sendToIRC(discordID, topicMSG2, socketID);
 
         memberListLines.forEach(function(line) {
             const memberListMSG = `${memberlistTemplate}${line}\r\n`;
             console.log(memberListMSG);
-            sendToIRC(discordID, memberListMSG);
+            sendToIRC(discordID, memberListMSG, socketID);
         });
 
 
         const endListMSG = `:${configuration.ircServer.hostname} 366 ${nickname} #${channel} :End of /NAMES list.\r\n`;
         console.log(endListMSG);
-        sendToIRC(discordID, endListMSG);
+        sendToIRC(discordID, endListMSG, socketID);
 
 
-        setTimeout(function() {
-            for (let key in ircDetails[discordID][channel].members) {
-                if (ircDetails[discordID][channel].members.hasOwnProperty(key)) {
+        const socketDetails = getSocketDetails(socketID);
 
-                    let member = ircDetails[discordID][channel].members[key];
+        if (socketDetails.awayNotify) {
+            for (let key in ircDetails[discordID].channels[channel].members) {
+                if (ircDetails[discordID].channels[channel].members.hasOwnProperty(key)) {
+
+                    let member = ircDetails[discordID].channels[channel].members[key];
                     let nickname = member.ircNick;
-                    if (member.discordState === 'idle' || member.discordState === 'dnd' || (member.discordState === 'offline' && configuration.showOfflineUsers)) {
 
-                        sendToIRC(discordID, `:${nickname}!${member.id}@whatever AWAY :Do not disturb\r\n`);
+                    switch (member.discordState) {
+                        case 'idle':
+                            sendToIRC(discordID, `:${nickname}!${member.id}@whatever AWAY :Idle\r\n`, socketID);
+                            break;
+                        case 'dnd':
+                            sendToIRC(discordID, `:${nickname}!${member.id}@whatever AWAY :Do not disturb\r\n`, socketID);
+                            break;
+                        case 'offline':
+                            if (configuration.showOfflineUsers) {
+                                sendToIRC(discordID, `:${nickname}!${member.id}@whatever AWAY :Offline\r\n`, socketID);
+                            }
+
+                            break;
 
                     }
                 }
             }
-        }, 500);
+        }
+
 
 
     } else {
-        sendToIRC(discordID, `:${configuration.ircServer.hostname} 473 ${nickname} #${channel} :Cannot join channel\r\n`);
+        sendToIRC(discordID, `:${configuration.ircServer.hostname} 473 ${nickname} #${channel} :Cannot join channel\r\n`, socketID);
     }
 }
 
 // List command, let's give back a list of channels.
-function listCommand(discordID) {
+function listCommand(discordID, ircID) {
     if (discordID === 'DMserver') return;
     const nickname = ircDetails[discordID].ircDisplayName;
     const channels = discordClient.guilds.get(discordID).channels.array();
@@ -762,19 +803,28 @@ function listCommand(discordID) {
     listResponse.push(endlist);
 
     listResponse.forEach(function(line) {
-        sendToIRC(discordID, line);
+        sendToIRC(discordID, line, ircID);
     });
 
 }
 
 // Part command given, let's part the channel. 
-function partCommand(channel, discordID) {
+function partCommand(channel, discordID, ircID) {
     const nickname = ircDetails[discordID].ircDisplayName;
-    if (ircDetails[discordID].hasOwnProperty(channel)) {
+    if (ircDetails[discordID].channels.hasOwnProperty(channel)) {
         // Let's clear the channel
-        ircDetails[discordID][channel].members = {};
-        ircDetails[discordID][channel].joined = false;
-        sendToIRC(discordID, `:${nickname}!${discordClient.user.id}@whatever PART #${channel}\r\n`);
+        
+        const socketIndex = ircDetails[discordID].channels[channel].joined.indexOf(ircID);
+        if (socketIndex > -1) {
+            ircDetails[discordID].channels[channel].joined.splice(socketIndex, 1);
+        }
+
+        // If no other sockets are connected we clear the channel.
+        if (ircDetails[discordID].channels[channel].joined.length === 0) {
+            ircDetails[discordID].channels[channel].members = {};
+        }       
+
+        sendToIRC(discordID, `:${nickname}!${discordClient.user.id}@whatever PART #${channel}\r\n`, ircID);
     }
 }
 
@@ -782,9 +832,9 @@ function getDiscordUserFromIRC(recipient, discordID) {
     let returnmember;
 
     if (discordID === 'DMserver') {
-        discordClient.users.array().forEach(function(user){
+        discordClient.users.array().forEach(function(user) {
             const isBot = user.bot;
-            const discriminator = user.discriminator;   
+            const discriminator = user.discriminator;
             const displayMember = ircNickname(user.username, isBot, discriminator);
 
             if (displayMember === recipient) {
@@ -792,9 +842,9 @@ function getDiscordUserFromIRC(recipient, discordID) {
             }
         });
     } else {
-        discordClient.guilds.get(discordID).members.array().forEach(function(member){
+        discordClient.guilds.get(discordID).members.array().forEach(function(member) {
             const isBot = member.user.bot;
-            const discriminator = member.user.discriminator;   
+            const discriminator = member.user.discriminator;
             const displayMember = ircNickname(member.displayName, isBot, discriminator);
 
             if (displayMember === recipient) {
@@ -818,7 +868,10 @@ let ircServer = net.createServer(function(socket) {
     socket.nickname = '';
     socket.user = '';
     socket.pongcount = 1;
+    socket.isCAPBlocked = false;
     socket.authenticated = false;
+    socket.connectArray = [];
+    socket.awayNotify = false;
 
     socket.on('error', function(error) {
         console.log('Socket error: ', error);
@@ -831,98 +884,182 @@ let ircServer = net.createServer(function(socket) {
         let dataArray = data.match(/.+/g);
         dataArray.forEach(function(line) {
             let parsedLine = parseMessage(line);
-            if (parsedLine.command === 'PASS') {
-                const discordid = parsedLine.params[0];
-                socket.discordid = discordid;
-            }
 
-            if (parsedLine.command === 'NICK' && socket.discordid) {
-                const nickname = parsedLine.params[0];
-                socket.nickname = nickname;
-            }
+            // Dealing with IRC v3.1 capability negotiation. 
+            // http://ircv3.net/specs/core/capability-negotiation-3.1.html
+            // v3.2 is also available but does not seem to add anything we need. 
+            if (parsedLine.command === 'CAP') {
+                const capSubCommand = parsedLine.params[0];
+                let nickname;
+                if (socket.nickname) {
+                    nickname = socket.nickname;
+                } else {
+                    nickname = '*';
+                }
+                switch (capSubCommand) {
+                    case 'LS':
+                        socket.isCAPBlocked = true;
 
-            if (parsedLine.command === 'USER' && socket.discordid) {
+                        socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} LS :away-notify\r\n`);
 
-                // So different irc clients use different formats for user it seems.
-                // TODO: figure out how to properly parse this. 
-                let username = parsedLine.params[0];
-                let usernameAlternative = parsedLine.params[3];
-                socket.user = username;
-                let nickname = socket.nickname;
+                        break;
+                    case 'LIST':
+                        if (socket.awayNotify) {
+                            socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} LIST :away-notify\r\n`);
+                        } else {
+                            socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} LIST :\r\n`);
+                        }
+                        break;
+                    case 'REQ':
+                        const requestedCapabilities = parsedLine.params[1];
 
-                // We are abusing some irc functionality here to add a tiny bit of security. 
-                // The username the ircclient gives must match with that in the configuration.
-                // If the username is correct and the discordId can be found we are in bussiness. 
-                if (username === configuration.ircServer.username || usernameAlternative === configuration.ircServer.username) {
-                    // Now we are connected let's change the nickname first to whatever it is on discord. 
+                        if (requestedCapabilities === 'away-notify') {
+                            socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} ACK :away-notify\r\n`);
+                            socket.awayNotify = true;
 
-                    // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
-                    if (socket.discordid === 'DMserver') {
-                        const newuser = discordClient.user.username;
-                        const discriminator = discordClient.user.discriminator; 
-                        const newNickname = ircNickname(newuser, false, discriminator);
+                        } else if (requestedCapabilities === '-away-notify') {
+                            socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} ACK :-away-notify\r\n`);
+                            socket.awayNotify = false;
+                        } else {
+                            socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} NAK :${requestedCapabilities}\r\n`);
+                        }
 
-                        ircDetails[socket.discordid]['discordDisplayName'] = newuser;
-                        ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
-                        socket.user = newuser;
-                        socket.nickname = newNickname;
-                        socket.authenticated = true;
-                        const connectArray = [
-                            `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
-                            `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
-                            `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
-                        ];
+                        socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} ACK :${parsedLine.params[0]}\r\n`);
 
-                        connectArray.forEach(function(line) {
-                            socket.write(line);
-                        });
-
-                    } else if (discordClient.guilds.get(socket.discordid)) {
-                        discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
-                            const newuser = guildMember.displayName;
-                            const discriminator = discordClient.user.discriminator;
-                            const newNickname = ircNickname(newuser, false, discriminator);
-
-                            ircDetails[socket.discordid]['discordDisplayName'] = newuser;
-                            ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
-
-                            socket.user = newuser;
-                            socket.nickname = newNickname;
-                            socket.authenticated = true;
-                            const connectArray = [
-                                `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
-                                `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
-                                `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
-                            ];
-
-                            connectArray.forEach(function(line) {
+                        break;
+                    case 'ACK':
+                        // Not expecting this from a client at this point. However we'll leave it in here for future use. 
+                        break;
+                    case 'END':
+                        socket.isCAPBlocked = false;
+                        // Now we check if the user was already authenticated and the whole welcome thing has been send. 
+                        if (socket.connectArray.length > 0) {
+                            socket.connectArray.forEach(function(line) {
                                 socket.write(line);
                             });
+                            // And empty it. 
+                            socket.connectArray = [];
+                        }
+                        break;
 
+                    default:
+                        // We have no idea what we are dealing with. Inform the client. 
+                        socket.write(`:${configuration.ircServer.hostname} 410 * ${capSubCommand} :Invalid CAP command\r\n`);
+                        break;
 
-                        });
-                    } else {
-                        // Things are not working out, let's end this. 
-                        socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
-                         console.log('no 1')
-                        socket.end();
-                    }
-
-                } else {
-                    // Things are not working out, let's end this. 
-                    console.log('no 2')
-                    socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
-                    socket.end();
                 }
+
             }
-            if (socket.authenticated) {
+
+            if (!socket.authenticated) {
+                switch (parsedLine.command) {
+                    case 'PASS':
+                        socket.discordid = parsedLine.params[0];
+                        break;
+                    case 'NICK':
+                        socket.nickname = parsedLine.params[0];
+                        break;
+                    case 'USER':
+                        // So different irc clients use different formats for user it seems.
+                        // TODO: figure out how to properly parse this. 
+                        let username = parsedLine.params[0];
+                        let usernameAlternative = parsedLine.params[3];
+                        socket.user = username;
+                        let nickname = socket.nickname;
+
+                        // We are abusing some irc functionality here to add a tiny bit of security. 
+                        // The username the ircclient gives must match with that in the configuration.
+                        // If the username is correct and the discordId can be found we are in bussiness. 
+                        if (username === configuration.ircServer.username || usernameAlternative === configuration.ircServer.username) {
+                            // Now we are connected let's change the nickname first to whatever it is on discord. 
+
+
+                            if (socket.discordid === 'DMserver') {
+                                const newuser = discordClient.user.username;
+                                const discriminator = discordClient.user.discriminator;
+                                const newNickname = ircNickname(newuser, false, discriminator);
+
+                                ircDetails[socket.discordid]['discordDisplayName'] = newuser;
+                                ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
+                                socket.user = newuser;
+                                socket.nickname = newNickname;
+                                socket.authenticated = true;
+
+
+                                const connectArray = [
+                                    `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
+                                    `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
+                                    `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
+                                ];
+
+                                connectArray.forEach(function(line) {
+                                    socket.write(line);
+                                });
+
+                            } else if (discordClient.guilds.get(socket.discordid)) {
+                                // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
+                                discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
+                                    const newuser = guildMember.displayName;
+                                    const discriminator = discordClient.user.discriminator;
+                                    const newNickname = ircNickname(newuser, false, discriminator);
+
+                                    ircDetails[socket.discordid]['discordDisplayName'] = newuser;
+                                    ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
+
+                                    socket.user = newuser;
+                                    socket.nickname = newNickname;
+                                    socket.authenticated = true;
+
+                                    //console.log(`:${configuration.ircServer.hostname} NOTICE Auth :*** Looking up your hostname...\r\n`);
+
+                                    const connectArray = [
+                                        `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
+                                        `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
+                                        `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
+                                    ];
+
+                                    // If we are waiting on CAP negotiation we write the connection array to the socket and this will be processed once proper CAP END is received.
+                                    if (socket.isCAPBlocked) {
+                                        socket.connectArray = connectArray;
+
+                                    } else {
+                                        connectArray.forEach(function(line) {
+                                            socket.write(line);
+                                        });
+                                    }
+
+
+
+
+                                });
+                            } else {
+                                // Things are not working out, let's end this. 
+                                socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
+                                console.log('no 1')
+                                socket.end();
+                            }
+
+                        } else {
+                            // Things are not working out, let's end this. 
+                            console.log('no 2')
+                            socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
+                            socket.end();
+                        }
+                        break;
+                }
+
+            }
+
+
+
+            if (socket.authenticated && !socket.isCAPBlocked) {
 
                 switch (parsedLine.command) {
                     case 'JOIN':
                         const joinChannels = parsedLine.params[0].split(',');
 
                         joinChannels.forEach(function(channel) {
-                            joinCommand(channel.substring(1), socket.discordid);
+                            joinCommand(channel.substring(1), socket.discordid, socket.ircid);
                         });
 
                         break;
@@ -930,52 +1067,50 @@ let ircServer = net.createServer(function(socket) {
                         const partChannels = parsedLine.params[0].split(',');
 
                         partChannels.forEach(function(channel) {
-                            partCommand(channel.substring(1), socket.discordid);
+                            partCommand(channel.substring(1), socket.discordid, socket.ircid);
                         });
                         break;
                     case 'PRIVMSG':
                         const recipient = parsedLine.params[0];
-                       
+
                         if (recipient.startsWith('#')) {
                             const channelName = recipient.substring(1);
                             const sendLine = parseIRCLine(parsedLine.params[1], socket.discordid, channelName);
 
-                            if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
+                            if (ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
                                 ircDetails[socket.discordid].lastPRIVMSG.shift();
                             }
 
                             ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
-                            discordClient.channels.get(ircDetails[socket.discordid][channelName].id).sendMessage(sendLine);
+                            discordClient.channels.get(ircDetails[socket.discordid].channels[channelName].id).sendMessage(sendLine);
                         } else {
                             const recipientUser = getDiscordUserFromIRC(recipient, socket.discordid);
                             const sendLine = parsedLine.params[1];
                             recipientUser.sendMessage(sendLine);
 
                             ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
-                            if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
+                            if (ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
                                 ircDetails[socket.discordid].lastPRIVMSG.shift();
                             }
 
                             if (socket.discordid !== 'DMserver') {
                                 const messageTemplate = `:${socket.nickname}!${discordClient.user.id}@whatever PRIVMSG ${recipient} :PM Send: Note that replies will not arrive here but on the PM server\r\n`;
                                 socket.write(messageTemplate);
-                            } 
-                            if(ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
+                            }
+                            if (ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
                                 ircDetails[socket.discordid].lastPRIVMSG.shift();
                             }
-
-
-
-
-                            
                         }
-                        
 
                         break;
                     case 'QUIT':
                         for (let channel in ircDetails[socket.discordid]) {
-                            if (ircDetails[socket.discordid].hasOwnProperty(channel) && ircDetails[socket.discordid][channel].joined) {
-                                ircDetails[socket.discordid][channel].joined = false;
+                            if (ircDetails[socket.discordid].channels.hasOwnProperty(channel) && ircDetails[socket.discordid].channels[channel].indexOf(socket.ircid)) {
+                                const socketIndex = ircDetails[socket.discordid].channels[channel].joined.indexOf(socket.ircid);
+                                if (socketIndex > -1) {
+                                    ircDetails[socket.discordid].channels[channel].joined.splice(socketIndex, 1);
+                                }
+
                             }
                         }
                         socket.end();
@@ -985,7 +1120,7 @@ let ircServer = net.createServer(function(socket) {
                         socket.pongcount = socket.pongcount + 1;
                         break;
                     case 'LIST':
-                        listCommand(socket.discordid);
+                        listCommand(socket.discordid, socket.ircid);
 
                 }
             }
@@ -1002,12 +1137,32 @@ let ircServer = net.createServer(function(socket) {
 });
 
 // Function for sending messages to the connect irc clients 
-function sendToIRC(discordServerId, line) {
+function sendToIRC(discordServerId, line, ircid = 0) {
     ircClients.forEach(function(socket) {
-        if (socket.discordid === discordServerId) {
+        if (socket.discordid === discordServerId && socket.authenticated && !socket.isCAPBlocked && (ircid === 0 || ircid === socket.ircid)) {
             socket.write(line);
         }
     });
+}
+
+function getSocketDetails(socketID) {
+    let socketDetails = {};
+
+    ircClients.forEach(function(socket) {
+        if (socket.ircid === socketID) {
+            socketDetails = {
+                ircid: socket.ircid,
+                discordid: socket.discordid,
+                nickname: socket.nickname,
+                user: socket.user,
+                isCAPBlocked: socket.isCAPBlocked,
+                authenticated: socket.authenticated,
+                awayNotify: socket.awayNotify
+            };
+        }
+    });
+
+    return socketDetails;
 }
 
 // Sending notices to all connected clients.
