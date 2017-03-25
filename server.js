@@ -403,7 +403,7 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
 
             let channelDetails = ircDetails[guildID].channels[channel];
             let channelMembers = channelDetails.members;
-            console.log(channel);
+
             // Within the channels we go over the members. 
             if (channelMembers.hasOwnProperty(oldIrcDisplayName)) {
                 let tempMember = channelMembers[oldIrcDisplayName];
@@ -591,7 +591,7 @@ discordClient.on('message', function(msg) {
                         // Let's make people aware they are mentioned in channels they are not in. 
                         if(memberMentioned || memberDirectlyMentioned) {
                             ircClients.forEach(function(socket) {                                
-                                if (socket.discordid === discordServerId) {
+                                if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[channelName].joined.indexOf(socket.ircid) === -1) {
                                     const message = `:discordIRCd!notReallyA@User PRIVMSG discordIRCd :#${channelName}: ${lineToSend}\r\n`;
                                     sendToIRC(discordServerId, message, socket.ircid);
                                 }
