@@ -6,8 +6,22 @@ if (!configuration.DEBUG) {
     console.log = function() {};
 }
 
-const net = require('net');
+
 const Discord = require("discord.js");
+const fs = require('fs');
+let net;
+let netOptions = {};
+
+if (configuration.tlsEnabled) {
+    net = require('tls');
+    netOptions = {
+      key: fs.readFileSync(configuration.tlsOptions.keyPath),
+      cert: fs.readFileSync(configuration.tlsOptions.certPath) 
+    }
+
+} else {
+    net = require('net');
+}
 
 //
 // Let's ready some variables and stuff we will use later on.
@@ -869,7 +883,7 @@ function getDiscordUserFromIRC(recipient, discordID) {
 //
 // Irc Related functionality.
 //
-let ircServer = net.createServer(function(socket) {
+let ircServer = net.createServer(netOptions, function(socket) {
     console.log('new socket');
     socket.setEncoding('utf8');
 
