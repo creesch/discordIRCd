@@ -296,7 +296,7 @@ discordClient.on('ready', function() {
 function guildMemberNoMore(guildID, ircDisplayName, noMoreReason) {
     let found = false;
     // First we go over the channels. 
-    for (let channel in ircDetails[guildID]) {
+    for (let channel in ircDetails[guildID].channels) {
         if (ircDetails[guildID].channels.hasOwnProperty(channel) && ircDetails[guildID].channels[channel].joined.length > 0) {
 
             let channelMembers = ircDetails[guildID].channels[channel].members;
@@ -398,12 +398,12 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
     // First we go over the channels. 
     let foundInChannels = false;
     let memberId;
-    for (let channel in ircDetails[guildID]) {
+    for (let channel in ircDetails[guildID].channels) {
         if (ircDetails[guildID].channels.hasOwnProperty(channel) && ircDetails[guildID].channels[channel].joined.length > 0) {
 
             let channelDetails = ircDetails[guildID].channels[channel];
             let channelMembers = channelDetails.members;
-
+            console.log(channel);
             // Within the channels we go over the members. 
             if (channelMembers.hasOwnProperty(oldIrcDisplayName)) {
                 let tempMember = channelMembers[oldIrcDisplayName];
@@ -1116,7 +1116,7 @@ let ircServer = net.createServer(function(socket) {
 
                         break;
                     case 'QUIT':
-                        for (let channel in ircDetails[socket.discordid]) {
+                        for (let channel in ircDetails[socket.discordid].channels) {
                             if (ircDetails[socket.discordid].channels.hasOwnProperty(channel) && ircDetails[socket.discordid].channels[channel].indexOf(socket.ircid)) {
                                 const socketIndex = ircDetails[socket.discordid].channels[channel].joined.indexOf(socket.ircid);
                                 if (socketIndex > -1) {
