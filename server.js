@@ -511,42 +511,47 @@ discordClient.on('message', function(msg) {
         const authorIrcName = ircNickname(authorDisplayName, isBot, discriminator);
         const channelName = msg.channel.name;
 
-        // Only act on text channels and if the user has joined them in irc. 
-        if (ircDetails[discordServerId].channels[channelName].joined.length > 0) {
-
-            // Doesn't really matter socket we pick this from as long as it is connected to the discord server.
-            let ownNickname = getSocketDetails(ircDetails[discordServerId].channels[channelName].joined[0]).nickname;
-
-            let messageContent = msg.content;
-            let memberMentioned = false;
-
-            const ownGuildMember = discordClient.guilds.get(discordServerId).members.get(discordClient.user.id);
+        
 
 
+        // Doesn't really matter socket we pick this from as long as it is connected to the discord server.
+        let ownNickname = getSocketDetails(ircDetails[discordServerId].channels[channelName].joined[0]).nickname;
 
-            if (msg.mentions.roles.array().length > 0) {
-                ownGuildMember.roles.array().forEach(function(role) {
-                    if (msg.isMentioned(role)) {
-                        memberMentioned = true;
-                    }
-                });
+        let messageContent = msg.content;
+        let memberMentioned = false;
+        let memberDirectlyMentioned = false; 
 
-            }
+        const ownGuildMember = discordClient.guilds.get(discordServerId).members.get(discordClient.user.id);
 
-            if (msg.mentions.everyone) {
-                memberMentioned = true;
-            }
+        if (msg.mentions.roles.array().length > 0) {
+            ownGuildMember.roles.array().forEach(function(role) {
+                if (msg.isMentioned(role)) {
+                    memberMentioned = true;
+                }
+            });
 
-            if (memberMentioned) {
-                messageContent = `${ownNickname}: ${messageContent}`;
-            }
+        }
 
+        if (msg.mentions.everyone) {
+            memberMentioned = true;
+        }
 
+        // Only add it if the nickname is known. If it is undefined the client is not in the channel and will be notified through PM anyway.
+        if (memberMentioned && ownNickname) {
+            messageContent = `${ownNickname}: ${messageContent}`;
+        }
+
+        if (msg.mentions.users.array().length > 0) {		 
+                if (msg.isMentioned(ownGuildMember)) {		
+                    memberDirectlyMentioned = true;		
+                }		
+        }
+
+        // Only act on text channels and if the user has joined them in irc or if the user is mentioned in some capacity. 
+        if (ircDetails[discordServerId].channels[channelName].joined.length > 0 || memberMentioned || memberDirectlyMentioned) {
 
             // IRC does not handle newlines. So we split the message up per line and send them seperatly.
             const messageArray = messageContent.split(/\r?\n/);
-
-
 
             const attachmentArray = msg.attachments.array();
             if (attachmentArray.length > 0) {
@@ -576,9 +581,20 @@ discordClient.on('message', function(msg) {
                         const lineToSend = parseDiscordLine(sendLine, discordServerId);
                         const message = `${messageTemplate}${lineToSend}\r\n`;
 
-                        ircDetails[discordServerId].channels[channelName].joined.forEach(function(socketID) {
+                        ircDetails[discordServerId].channels[channelName].joined.forEach(function(socketID) {                            
                             sendToIRC(discordServerId, message, socketID);
                         });
+
+                        // Let's make people aware they are mentioned in channels they are not in. 
+                        if(memberMentioned || memberDirectlyMentioned) {
+                            ircClients.forEach(function(socket) {                                
+                                if (socket.discordid === discordServerId) {
+                                    const message = `:discordIRCd!notReallyA@User PRIVMSG discordIRCd :#${channelName}: ${lineToSend}\r\n`;
+                                    sendToIRC(discordServerId, message, socket.ircid);
+                                }
+                            });
+                        }
+
                     }
                 });
 
@@ -1064,6 +1080,7 @@ let ircServer = net.createServer(function(socket) {
                         break;
                     case 'PRIVMSG':
                         const recipient = parsedLine.params[0];
+                        
 
                         if (recipient.startsWith('#')) {
                             const channelName = recipient.substring(1);
@@ -1075,7 +1092,7 @@ let ircServer = net.createServer(function(socket) {
 
                             ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
                             discordClient.channels.get(ircDetails[socket.discordid].channels[channelName].id).sendMessage(sendLine);
-                        } else {
+                        } else if(recipient !== 'discordIRCd') {
                             const recipientUser = getDiscordUserFromIRC(recipient, socket.discordid);
                             const sendLine = parsedLine.params[1];
                             recipientUser.sendMessage(sendLine);
