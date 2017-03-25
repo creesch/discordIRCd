@@ -93,7 +93,9 @@ function parseDiscordLine(line, discordID) {
     // Discord markdown parsing the lazy way. Probably fails in a bunch of different ways but at least it is easy. 
     line = line.replace(/\*\*(.*?)\*\*/g, '\x02$1\x0F');
     line = line.replace(/\*(.*?)\*/g, '\x1D$1\x0F');
+    line = line.replace(/^_(.*?)\_/g, '\x01ACTION $1\x01');
     line = line.replace(/__(.*?)__/g, '\x1F$1\x0F');
+
     // With the above regex we might end up with to many end characters. This replaces the, 
     line = line.replace(/\x0F{2,}/g, '\x0F');
 
@@ -154,6 +156,7 @@ function parseDiscordLine(line, discordID) {
 
 // Parse irc lines to make them work better on discord.
 function parseIRCLine(line, discordID, channel) {
+    line = line.replace(/\001ACTION(.*?)\001/g, '_$1_');
 
     const mentionDiscordRegex = /(@.{1,}?\s)/g;
     let mentionDiscordFound = line.match(mentionDiscordRegex);
