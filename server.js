@@ -1264,12 +1264,6 @@ let ircServer = net.createServer(netOptions, function(socket) {
                     case 'WHOIS':
                         const whoisUser = parsedLine.params[0].trim();
                         const userID = ircDetails[socket.discordid].members[whoisUser];
-
-
-                        socket.write(`:${configuration.ircServer.hostname} 307 ${socket.nickname} ${whoisUser} :is a something something.\r\n`);
-                        socket.write(`:${configuration.ircServer.hostname} 307 ${socket.nickname} ${whoisUser} :is a something something as well.\r\n`);
-                        socket.write(`:${configuration.ircServer.hostname} 318 ${socket.nickname} ${whoisUser} :End of /WHOIS list.\r\n`);
-
                         break;
 
                 }
