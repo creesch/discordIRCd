@@ -271,7 +271,23 @@ discordClient.on('ready', function() {
     if (discordFirstConnection) {
         discordFirstConnection = false;
 
+        discordClient.guilds.array().forEach(function(guild) {
+            const guildID = guild.id;
+            if (!ircDetails.hasOwnProperty(guildID)) {
+                ircDetails[guildID] = {
+                    lastPRIVMSG: [],
+                    channels: {},
+                    members: {}
+                };
+            }
 
+            guild.members.array().forEach(function(member){
+                const ircDisplayName = ircNickname(member.displayName, member.user.bot, member.user.discriminator);
+                ircDetails[guildID].members[ircDisplayName] = member.id;
+            });
+
+            
+        });
         discordClient.channels.array().forEach(function(channel) {
             // Of course only for channels. 
             if (channel.type === 'text') {
@@ -280,12 +296,7 @@ discordClient.on('ready', function() {
                     channelID = channel.id,
                     channelTopic = channel.topic || 'No topic';
 
-                if (!ircDetails.hasOwnProperty(guildID)) {
-                    ircDetails[guildID] = {
-                        lastPRIVMSG: [],
-                        channels: {}
-                    };
-                }
+
                 ircDetails[guildID].channels[channelName] = {
                     id: channelID,
                     joined: [],
@@ -293,6 +304,8 @@ discordClient.on('ready', function() {
                 };
             }
         });
+
+
 
         // Now that is done we can start the irc server side of things. 
         ircServer.listen(configuration.ircServer.listenPort);
@@ -329,6 +342,11 @@ function guildMemberNoMore(guildID, ircDisplayName, noMoreReason) {
             }
         }
     }
+
+    if(noMoreReason !== 'User gone offline') {
+        delete ircDetails[guildID].members[ircDisplayName];
+    }
+
 }
 
 function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
@@ -412,6 +430,11 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
     // First we go over the channels. 
     let foundInChannels = false;
     let memberId;
+
+    ircDetails[guildID].members[newIrcDisplayName] = ircDetails[guildID].members[oldIrcDisplayName];
+    delete ircDetails[guildID].members[oldIrcDisplayName];
+
+
     for (let channel in ircDetails[guildID].channels) {
         if (ircDetails[guildID].channels.hasOwnProperty(channel) && ircDetails[guildID].channels[channel].joined.length > 0) {
 
@@ -1237,6 +1260,17 @@ let ircServer = net.createServer(netOptions, function(socket) {
                         break;
                     case 'LIST':
                         listCommand(socket.discordid, socket.ircid);
+                        break;
+                    case 'WHOIS':
+                        const whoisUser = parsedLine.params[0].trim();
+                        const userID = ircDetails[socket.discordid].members[whoisUser];
+
+
+                        socket.write(`:${configuration.ircServer.hostname} 307 ${socket.nickname} ${whoisUser} :is a something something.\r\n`);
+                        socket.write(`:${configuration.ircServer.hostname} 307 ${socket.nickname} ${whoisUser} :is a something something as well.\r\n`);
+                        socket.write(`:${configuration.ircServer.hostname} 318 ${socket.nickname} ${whoisUser} :End of /WHOIS list.\r\n`);
+
+                        break;
 
                 }
             }
