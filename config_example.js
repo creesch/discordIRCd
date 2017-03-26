@@ -7,6 +7,8 @@ global.configuration = {
       keyPath: '/path/to/key.pem',
       certPath: '/path/to/cert.pem'
     },
+    handleCode: true, 
+    githubToken: '<TOKEN>',
     ircServer: {
         listenPort: 6667,
         hostname: '<HOSTNAME>',

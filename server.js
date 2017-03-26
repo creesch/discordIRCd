@@ -15,13 +15,22 @@ let netOptions = {};
 if (configuration.tlsEnabled) {
     net = require('tls');
     netOptions = {
-      key: fs.readFileSync(configuration.tlsOptions.keyPath),
-      cert: fs.readFileSync(configuration.tlsOptions.certPath) 
+        key: fs.readFileSync(configuration.tlsOptions.keyPath),
+        cert: fs.readFileSync(configuration.tlsOptions.certPath)
     }
 
 } else {
     net = require('net');
 }
+
+let request;
+
+if (configuration.handleCode) {
+    request = require('request');
+}
+
+
+
 
 //
 // Let's ready some variables and stuff we will use later on.
@@ -281,12 +290,12 @@ discordClient.on('ready', function() {
                 };
             }
 
-            guild.members.array().forEach(function(member){
+            guild.members.array().forEach(function(member) {
                 const ircDisplayName = ircNickname(member.displayName, member.user.bot, member.user.discriminator);
                 ircDetails[guildID].members[ircDisplayName] = member.id;
             });
 
-            
+
         });
         discordClient.channels.array().forEach(function(channel) {
             // Of course only for channels. 
@@ -343,7 +352,7 @@ function guildMemberNoMore(guildID, ircDisplayName, noMoreReason) {
         }
     }
 
-    if(noMoreReason !== 'User gone offline') {
+    if (noMoreReason !== 'User gone offline') {
         delete ircDetails[guildID].members[ircDisplayName];
     }
 
@@ -456,7 +465,7 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
     }
     if (foundInChannels) {
         console.log(`Changing nickname ${oldIrcDisplayName} into ${newIrcDisplayName}`);
-            sendToIRC(guildID, `:${oldIrcDisplayName}!${memberId}@whatever NICK ${newIrcDisplayName}\r\n`);
+        sendToIRC(guildID, `:${oldIrcDisplayName}!${memberId}@whatever NICK ${newIrcDisplayName}\r\n`);
     }
 }
 
@@ -489,7 +498,7 @@ discordClient.on('presenceUpdate', function(oldMember, newMember) {
             guildMemberNoMore(guildID, ircDisplayName, 'User gone offline');
         } else if (configuration.showOfflineUsers) {
             ircClients.forEach(function(socket) {
-                if(socket.awayNotify) {
+                if (socket.awayNotify) {
                     // Technically we could just do socket.writeline for these. But for consistency we go through the sendToIRC function.
                     if (newPresenceState === 'offline' && configuration.showOfflineUsers) {
                         sendToIRC(guildID, `:${ircDisplayName}!${newMember.id}@whatever AWAY :Offline\r\n`, socket.ircid);
@@ -541,7 +550,7 @@ discordClient.on('guildMemberAdd', function(GuildMember) {
 });
 
 discordClient.on('channelCreate', function(newChannel) {
-    if(newChannel.type === 'text') {
+    if (newChannel.type === 'text') {
         const discordServerId = newChannel.guild.id;
         ircDetails[discordServerId].channels[newChannel.name] = {
             id: newChannel.id,
@@ -553,14 +562,14 @@ discordClient.on('channelCreate', function(newChannel) {
 });
 
 discordClient.on('channelDelete', function(deletedChannel) {
-    if(deletedChannel.type === 'text') {
+    if (deletedChannel.type === 'text') {
         const discordServerId = deletedChannel.guild.id;
-        if(ircDetails[discordServerId].channels[deletedChannel.name].joined.length > 0) {
+        if (ircDetails[discordServerId].channels[deletedChannel.name].joined.length > 0) {
             const PartAlertMessage = `:discordIRCd!notReallyA@User PRIVMSG #${deletedChannel.name} :#${deletedChannel.name} has been deleted \r\n`;
             sendToIRC(discordServerId, PartAlertMessage);
             const joinedSockets = ircDetails[discordServerId].channels[deletedChannel.name].joined;
 
-            joinedSockets.forEach(function(socketID){
+            joinedSockets.forEach(function(socketID) {
                 // First we inform the user in the old channelContent
                 partCommand(deletedChannel.name, discordServerId, socketID);
             });
@@ -576,9 +585,9 @@ discordClient.on('channelDelete', function(deletedChannel) {
 discordClient.on('channelUpdate', function(oldChannel, newChannel) {
     const discordServerId = oldChannel.guild.id;
     console.log('channel updated');
-    if(oldChannel.type === 'text') {
-        
-            if (oldChannel.name !== newChannel.name) {
+    if (oldChannel.type === 'text') {
+
+        if (oldChannel.name !== newChannel.name) {
             console.log(`channel name changed from #${oldChannel.name} to #${newChannel.name}`);
             ircDetails[discordServerId].channels[newChannel.name] = {
                 id: newChannel.id,
@@ -587,12 +596,12 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
                 joined: []
             };
 
-            if(ircDetails[discordServerId].channels[oldChannel.name].joined.length > 0) {
+            if (ircDetails[discordServerId].channels[oldChannel.name].joined.length > 0) {
                 const PartAlertMessage = `:discordIRCd!notReallyA@User PRIVMSG #${oldChannel.name} :#${oldChannel.name} has been renamed to #${newChannel.name} \r\n`;
                 sendToIRC(discordServerId, PartAlertMessage);
                 const joinedSockets = ircDetails[discordServerId].channels[oldChannel.name].joined;
 
-                joinedSockets.forEach(function(socketID){
+                joinedSockets.forEach(function(socketID) {
                     // First we inform the user in the old channelContent
                     partCommand(oldChannel.name, discordServerId, socketID);
                     joinCommand(newChannel.name, discordServerId, socketID);
@@ -630,26 +639,143 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
 });
 
 
-
 // Processing received messages 
 discordClient.on('message', function(msg) {
     if (ircClients.length > 0 && msg.channel.type === 'text') {
+
+
         const discordServerId = msg.guild.id;
-        const authorDisplayName = msg.member.displayName;
+
+        // Webhooks don't have a member.
+        let authorDisplayName;
+
+        if (msg.member) {
+            authorDisplayName = msg.member.displayName;
+        } else {
+            authorDisplayName = msg.author.username;
+        }
         const isBot = msg.author.bot;
         const discriminator = msg.author.discriminator;
         const authorIrcName = ircNickname(authorDisplayName, isBot, discriminator);
         const channelName = msg.channel.name;
 
-        
+
 
 
         // Doesn't really matter socket we pick this from as long as it is connected to the discord server.
         let ownNickname = getSocketDetails(ircDetails[discordServerId].channels[channelName].joined[0]).nickname;
 
         let messageContent = msg.content;
+
+        if (configuration.handleCode) {
+            const codeRegex = /```(.*?)\r?\n([\s\S]*?)```/;
+            const replaceRegex = /```.*?\r?\n[\s\S]*?```/;
+
+            if (codeRegex.test(messageContent)) {
+                const codeDetails = messageContent.match(codeRegex);
+
+                // In the future I want to include the url in the message. But since the call to gist is async that doesn't fit the current structure. 
+                messageContent = messageContent.replace(replaceRegex, '');
+                let extension;
+                let language;
+                if (codeDetails[1]) {
+                    language = codeDetails[1].toLowerCase();
+
+
+                    switch (language) {
+                        case 'javascript':
+                            extension = 'js';
+                            break;
+                        case 'html':
+                            extension = 'html';
+                            break;
+                        case 'css':
+                            extension = 'css';
+                            break;
+                        case 'xml':
+                            extension = 'xml';
+                            break;
+                        case 'python':
+                            extension = 'py';
+                            break;
+                        case 'c#':
+                            extension = 'cs';
+                            break;
+                        case 'c++':
+                            extension = 'cc';
+                            break;
+                        case 'php':
+                            extension = 'php';
+                            break;
+                        default:
+                            extension = 'txt';
+                            break;
+
+                    }
+
+                } else {
+                    extension = 'txt';
+                    language = 'unknown';
+
+                }
+
+                const gistFileName = `${authorIrcName}_code.${extension}`;
+
+                let postBody = {
+                        description: `Code block on ${msg.guild.name} in channel ${channelName} from ${authorIrcName}`,
+                        public: false,
+                        files: {
+                            }
+                    };
+                
+                postBody.files[gistFileName] = {
+                    'content': codeDetails[2]
+                };
+
+
+
+                
+                let gistOptions = {
+                    url: 'https://api.github.com/gists',
+                    headers: {
+                        'Authorization': `token ${configuration.githubToken}`,
+                        'User-Agent': 'discordIRCd'
+                    },
+                    method: 'POST',
+                    json: postBody
+                };
+                
+
+
+
+
+
+                request(gistOptions, function(error, response, body) {
+
+                    if (error) {
+                        console.log('Gist error:', error);
+                    }
+                    if (!error && response.statusCode === 201) {
+                        console.log(body.html_url);
+
+                        const gistMessage = `:${authorIrcName}!${msg.author.id}@whatever PRIVMSG #${channelName} :${body.html_url}\r\n`;
+                        ircDetails[discordServerId].channels[channelName].joined.forEach(function(socketID) {
+                            sendToIRC(discordServerId, gistMessage, socketID);
+                        });
+
+                    } 
+                    if (!error && response.statusCode !== 201) {
+                        console.log('Something went wrong on the gist side of things:', response.statusCode);
+                    }
+                });
+
+
+
+            }
+        }
+
         let memberMentioned = false;
-        let memberDirectlyMentioned = false; 
+        let memberDirectlyMentioned = false;
 
         const ownGuildMember = discordClient.guilds.get(discordServerId).members.get(discordClient.user.id);
 
@@ -671,10 +797,10 @@ discordClient.on('message', function(msg) {
             messageContent = `${ownNickname}: ${messageContent}`;
         }
 
-        if (msg.mentions.users.array().length > 0) {		 
-                if (msg.isMentioned(ownGuildMember)) {		
-                    memberDirectlyMentioned = true;		
-                }		
+        if (msg.mentions.users.array().length > 0) {
+            if (msg.isMentioned(ownGuildMember)) {
+                memberDirectlyMentioned = true;
+            }
         }
 
         // Only act on text channels and if the user has joined them in irc or if the user is mentioned in some capacity. 
@@ -697,7 +823,7 @@ discordClient.on('message', function(msg) {
 
             messageArray.forEach(function(line) {
 
-                const messageTemplate = `:${authorIrcName}!${msg.member.id}@whatever PRIVMSG #${channelName} :`;
+                const messageTemplate = `:${authorIrcName}!${msg.author.id}@whatever PRIVMSG #${channelName} :`;
                 const messageTemplateLength = messageTemplate.length;
                 const remainingLength = maxLineLength - messageTemplateLength;
 
@@ -711,13 +837,13 @@ discordClient.on('message', function(msg) {
                         const lineToSend = parseDiscordLine(sendLine, discordServerId);
                         const message = `${messageTemplate}${lineToSend}\r\n`;
 
-                        ircDetails[discordServerId].channels[channelName].joined.forEach(function(socketID) {                            
+                        ircDetails[discordServerId].channels[channelName].joined.forEach(function(socketID) {
                             sendToIRC(discordServerId, message, socketID);
                         });
 
                         // Let's make people aware they are mentioned in channels they are not in. 
-                        if(memberMentioned || memberDirectlyMentioned) {
-                            ircClients.forEach(function(socket) {                                
+                        if (memberMentioned || memberDirectlyMentioned) {
+                            ircClients.forEach(function(socket) {
                                 if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[channelName].joined.indexOf(socket.ircid) === -1) {
                                     const message = `:discordIRCd!notReallyA@User PRIVMSG discordIRCd :#${channelName}: ${lineToSend}\r\n`;
                                     sendToIRC(discordServerId, message, socket.ircid);
@@ -951,7 +1077,7 @@ function partCommand(channel, discordID, ircID) {
     const nickname = ircDetails[discordID].ircDisplayName;
     if (ircDetails[discordID].channels.hasOwnProperty(channel)) {
         // Let's clear the channel
-        
+
         const socketIndex = ircDetails[discordID].channels[channel].joined.indexOf(ircID);
         if (socketIndex > -1) {
             ircDetails[discordID].channels[channel].joined.splice(socketIndex, 1);
@@ -960,7 +1086,7 @@ function partCommand(channel, discordID, ircID) {
         // If no other sockets are connected we clear the channel.
         if (ircDetails[discordID].channels[channel].joined.length === 0) {
             ircDetails[discordID].channels[channel].members = {};
-        }       
+        }
 
         sendToIRC(discordID, `:${nickname}!${discordClient.user.id}@whatever PART #${channel}\r\n`, ircID);
     }
@@ -1210,7 +1336,7 @@ let ircServer = net.createServer(netOptions, function(socket) {
                         break;
                     case 'PRIVMSG':
                         const recipient = parsedLine.params[0];
-                        
+
 
                         if (recipient.startsWith('#')) {
                             const channelName = recipient.substring(1);
@@ -1222,7 +1348,7 @@ let ircServer = net.createServer(netOptions, function(socket) {
 
                             ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
                             discordClient.channels.get(ircDetails[socket.discordid].channels[channelName].id).sendMessage(sendLine);
-                        } else if(recipient !== 'discordIRCd') {
+                        } else if (recipient !== 'discordIRCd') {
                             const recipientUser = getDiscordUserFromIRC(recipient, socket.discordid);
                             const sendLine = parsedLine.params[1];
                             recipientUser.sendMessage(sendLine);
