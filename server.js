@@ -1447,6 +1447,10 @@ function sendGeneralNotice(noticeText) {
 // We want to be able to kill the process without having to deal with leftover connections.
 process.on('SIGINT', function() {
     console.log('\nGracefully shutting down from SIGINT (Ctrl-C)');
+    sendGeneralNotice('IRC server has been shut down through SIGINT');
+    ircClients.forEach(function(socket) {
+        socket.close()
+    });
     discordClient.destroy();
     ircServer.close();
     process.exit();
