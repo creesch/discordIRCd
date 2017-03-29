@@ -1449,7 +1449,7 @@ process.on('SIGINT', function() {
     console.log('\nGracefully shutting down from SIGINT (Ctrl-C)');
     sendGeneralNotice('IRC server has been shut down through SIGINT');
     ircClients.forEach(function(socket) {
-        socket.close()
+        socket.end();
     });
     discordClient.destroy();
     ircServer.close();
