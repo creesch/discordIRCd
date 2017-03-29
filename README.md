@@ -1,3 +1,5 @@
+# IRC channel
+
 \#discordirc on irc.snoonet.org. 
 
 # discordIRCd
