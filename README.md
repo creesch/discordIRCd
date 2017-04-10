@@ -1,6 +1,6 @@
 # IRC channel
 
-\#discordirc on irc.snoonet.org. 
+\#discordircd on irc.snoonet.org. 
 
 # discordIRCd
 discordIRCd is a node.js application that allows you to connect to discord with your irc client.
