@@ -1298,15 +1298,15 @@ let ircServer = net.createServer(netOptions, function(socket) {
                                 });
                             } else {
                                 // Things are not working out, let's end this. 
-                                socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
-                                console.log('no 1')
+                                console.log(`${nickname}: Failed to connect to ${socket.discordid}`)
+                                socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :Failed to connect to ${socket.discordid}\r\n`);
                                 socket.end();
                             }
 
                         } else {
                             // Things are not working out, let's end this. 
-                            console.log('no 2')
-                            socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :no\r\n`);
+                            console.log(`${nickname}: Invalid login, expected ${configuration.ircServer.username}, got ${username} (${usernameAlternative})`);
+                            socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :Invalid login.  Make sure your username matches the username set in the config.\r\n`);
                             socket.end();
                         }
                         break;
