@@ -622,9 +622,9 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
 
 
         ircClients.forEach(function(socket) {
-            if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[oldChannel.name].joined.indexOf(socket.ircid) > -1) {
+            if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[newChannel.name].joined.indexOf(socket.ircid) > -1) {
 
-                const topicMSG = `:noboyknows!orCares@whatever TOPIC #${oldChannel.name} :${topic}\r\n`;
+                const topicMSG = `:noboyknows!orCares@whatever TOPIC #${newChannel.name} :${topic}\r\n`;
 
                 sendToIRC(discordServerId, topicMSG, socket.ircid);
 
