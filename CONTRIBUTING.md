@@ -28,7 +28,8 @@ Examples:
 ```
 
 ### Use 'let' or 'const' for variable declarations
-**Note:** because of legacy reasons toolbox still uses mostly `var` for variable declarations. These will be converted in the future, newly declared variables should use `let` or `const`. 
+
+  
 
 ### Statements longer than one line need to be bracketed. 
 
