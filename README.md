@@ -1,3 +1,10 @@
+# Contributions are very welcome! 
+
+This started out as a personal project when I had a lot of time on my hands a while ago. 
+There is still enough room for improvement and I do plan on eventually expanding this and tackling most [issues](https://github.com/creesch/discordIRCd/issues), however since I made this my available free time has been rather limited so I very much do welcome contributions. 
+
+See [CONTRIBUTING.md](https://github.com/creesch/discordIRCd/blob/master/CONTRIBUTING.md) for details. 
+
 # IRC channel
 
 \#discordircd on irc.snoonet.org. 
