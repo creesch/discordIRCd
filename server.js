@@ -1038,7 +1038,7 @@ function joinCommand(channel, discordID, socketID) {
         }
 
         // Fetch the last 20 Messages
-        channelContent.fetchMessages({limit: 20}).then((messages) => {
+        channelContent.fetchMessages({limit: configuration.discord.messageLimit}).then((messages) => {
             console.log(`Fetched messages for "${channel}"`);
             messages.array().forEach((msg) => {
                 // We check if the message we're about to send has more than 1 line.
