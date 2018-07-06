@@ -1044,7 +1044,7 @@ function joinCommand(channel, discordID, socketID) {
                 // We check if the message we're about to send has more than 1 line.
                 // If it does, then we need to send them one by one. Otherwise the client
                 // will try to interpret them as commands.
-                const lines = msg.cleanContent.split("\r\n");
+                const lines = msg.cleanContent.split(/\r?\n/);
                 if (lines.length > 1) {
                     for (let i = 0; i < lines.length; i++)
                      sendToIRC(discordID, `:${configuration.ircServer.hostname} PRIVMSG #${channel} ${msg.author.username} :${lines[i]}\r\n`, socketID);
