@@ -1037,10 +1037,14 @@ function joinCommand(channel, discordID, socketID) {
             }
         }
 
-        // Fetch the last 20 Messages
+        // Fetch the last n Messages
         channelContent.fetchMessages({limit: configuration.discord.messageLimit}).then((messages) => {
             console.log(`Fetched messages for "${channel}"`);
-            messages.array().forEach((msg) => {
+            // For some reason the messages are not ordered. So we need to sort
+            // them by creation date before we do anything.
+            messages.array().sort((msgA, msgB) => {
+                return msgA.createdAt - msgB.createdAt;
+            }).forEach((msg) => {
                 // We check if the message we're about to send has more than 1 line.
                 // If it does, then we need to send them one by one. Otherwise the client
                 // will try to interpret them as commands.
