@@ -845,7 +845,7 @@ discordClient.on('message', function(msg) {
                         if (memberMentioned || memberDirectlyMentioned) {
                             ircClients.forEach(function(socket) {
                                 if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[channelName].joined.indexOf(socket.ircid) === -1) {
-                                    const message = `:discordIRCd!notReallyA@User PRIVMSG discordIRCd :#${channelName}: ${lineToSend}\r\n`;
+                                    const message = `:discordIRCd!notReallyA@User PRIVMSG discordIRCd :#${channelName}: <${authorDisplayName}> ${lineToSend}\r\n`;
                                     sendToIRC(discordServerId, message, socket.ircid);
                                 }
                             });
