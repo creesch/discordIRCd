@@ -169,7 +169,7 @@ function parseDiscordLine(line, discordID) {
             const replaceRegex = new RegExp(mention, 'g');
             if (channelObject) {
                 const name = channelObject.name;
-                line = line.replace(replaceRegex, `@${name}`);
+                line = line.replace(replaceRegex, `#${name}`);
             }
         });
     }
