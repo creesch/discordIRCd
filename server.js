@@ -202,7 +202,7 @@ function parseIRCLine(line, discordID, channel) {
 
             let userNickname;
 
-            if (regexDiscordMention.mention) {
+            if (mention.match(regexDiscordMention)) {
                 userNickname = mention.replace(regexDiscordMention, '$1');
             } else {
                 userNickname = mention.replace(regexIrcMention, '$1');
