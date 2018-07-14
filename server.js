@@ -213,6 +213,22 @@ function parseIRCLine(line, discordID, channel) {
         });
     }
 
+    // Channel names
+    const mentionChannelRegex = /(#.+?\s)/g;
+    const mentionChannelFound = line.match(mentionChannelRegex);
+    if (mentionChannelFound) {
+        mentionChannelFound.forEach(function(mention) {
+            const channelName = mention.replace(/#(.+?)\s/, '$1');
+
+            if (ircDetails[discordID].channels.hasOwnProperty(channelName)) {
+                const userID = ircDetails[discordID].channels[channelName].id;
+                const replaceRegex = new RegExp(mention, 'g');
+
+                line = line.replace(replaceRegex, `<#${userID}> `);
+            }
+        });
+    }
+
     return line;
 }
 
