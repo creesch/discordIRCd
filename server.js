@@ -979,12 +979,12 @@ function joinCommand(channel, discordID, socketID) {
                     ircNick: displayMember,
                     id: member.id
                 };
-                const membersPlusDisplayMember = `${members} ${displayMember}`;
-                const newLineLenght = membersPlusDisplayMember.length;
-                const combinedLineLength = newLineLenght + memberlistTemplateLength;
+                const membersPlusDisplayMember = members ? `${members} ${displayMember}` : displayMember
+                const newLineLength = membersPlusDisplayMember.length;
+                const combinedLineLength = newLineLength + memberlistTemplateLength;
 
                 if (combinedLineLength < maxLineLength) {
-                    members = `${members} ${displayMember}`;
+                    members = membersPlusDisplayMember;
                 } else {
                     memberListLines.push(members);
                     members = displayMember;
