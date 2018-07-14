@@ -181,32 +181,12 @@ function parseDiscordLine(line, discordID) {
 function parseIRCLine(line, discordID, channel) {
     line = line.replace(/\001ACTION(.*?)\001/g, '_$1_');
 
+    // Discord-style username mentions (@User)
     const mentionDiscordRegex = /(@.+?\s)/g;
-    let mentionDiscordFound = line.match(mentionDiscordRegex);
-    const mentionIrcRegex = /(^.+?:)/g;
-    let mentionIrcFound = line.match(mentionIrcRegex);
-
-    let mentionFound;
-    if (mentionDiscordFound && mentionIrcFound) {
-        mentionFound = mentionDiscordFound.concat(mentionIrcFound);
-    } else if (mentionDiscordFound) {
-        mentionFound = mentionDiscordFound;
-    } else {
-        mentionFound = mentionIrcFound;
-    }
-
-    if (mentionFound) {
-        mentionFound.forEach(function(mention) {
-            const regexDiscordMention = /@(.+?)\s/;
-            const regexIrcMention = /^(.+?):/;
-
-            let userNickname;
-
-            if (mention.match(regexDiscordMention)) {
-                userNickname = mention.replace(regexDiscordMention, '$1');
-            } else {
-                userNickname = mention.replace(regexIrcMention, '$1');
-            }
+    const mentionDiscordFound = line.match(mentionDiscordRegex);
+    if (mentionDiscordFound) {
+        mentionDiscordFound.forEach(function(mention) {
+            const userNickname = mention.replace(/@(.+?)\s/, '$1');
 
             if (ircDetails[discordID].channels[channel].members.hasOwnProperty(userNickname)) {
                 const userID = ircDetails[discordID].channels[channel].members[userNickname].id;
@@ -216,6 +196,23 @@ function parseIRCLine(line, discordID, channel) {
             }
         });
     }
+
+    // IRC-style username mentions (User: at the start of the line)
+    const mentionIrcRegex = /(^.+?:)/g;
+    const mentionIrcFound = line.match(mentionIrcRegex);
+    if (mentionIrcFound) {
+        mentionIrcFound.forEach(function(mention) {
+            const userNickname = mention.replace(/^(.+?):/, '$1');
+
+            if (ircDetails[discordID].channels[channel].members.hasOwnProperty(userNickname)) {
+                const userID = ircDetails[discordID].channels[channel].members[userNickname].id;
+                const replaceRegex = new RegExp(mention, 'g');
+
+                line = line.replace(replaceRegex, `<@!${userID}>`);
+            }
+        });
+    }
+
     return line;
 }
 
