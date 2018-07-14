@@ -94,7 +94,7 @@ function parseMessage(line) {
 // Make nicknames work for irc. 
 function ircNickname(discordDisplayName, botuser, discriminator) {
     const replaceRegex = /[^a-zA-Z0-9_\\[\]\{\}\^`\|]/g;
-    const shortenRegex = /_{1,}/g;
+    const shortenRegex = /_+/g;
 
     if (replaceRegex.test(discordDisplayName)) {
 
@@ -123,12 +123,12 @@ function parseDiscordLine(line, discordID) {
     line = line.replace(/\x0F{2,}/g, '\x0F');
 
     // Now let's replace mentions with names we can recognize. 
-    const mentionUserRegex = /(<@!?\d{1,}?>)/g;
+    const mentionUserRegex = /(<@!?\d+?>)/g;
     const mentionUserFound = line.match(mentionUserRegex);
 
     if (mentionUserFound) {
         mentionUserFound.forEach(function(mention) {
-            const userID = mention.replace(/<@!?(\d{1,}?)>/, '$1');
+            const userID = mention.replace(/<@!?(\d+?)>/, '$1');
             const memberObject = discordClient.guilds.get(discordID).members.get(userID);
             const displayName = memberObject.displayName;
             const isBot = memberObject.user.bot;
@@ -143,11 +143,11 @@ function parseDiscordLine(line, discordID) {
     }
 
     // Now let's do this again and replace mentions with roles we can recognize. 
-    const mentionRoleRegex = /(<@&\d{1,}?>)/g;
+    const mentionRoleRegex = /(<@&\d+?>)/g;
     const mentionRoleFound = line.match(mentionRoleRegex);
     if (mentionRoleFound) {
         mentionRoleFound.forEach(function(mention) {
-            const roleID = mention.replace(/<@&(\d{1,}?)>/, '$1');
+            const roleID = mention.replace(/<@&(\d+?)>/, '$1');
             const roleObject = discordClient.guilds.get(discordID).roles.get(roleID);
 
             const replaceRegex = new RegExp(mention, 'g');
@@ -159,11 +159,11 @@ function parseDiscordLine(line, discordID) {
     }
 
     // Channels are also a thing!. 
-    const mentionChannelRegex = /(<#\d{1,}?>)/g;
+    const mentionChannelRegex = /(<#\d+?>)/g;
     const mentionChannelFound = line.match(mentionChannelRegex);
     if (mentionChannelFound) {
         mentionChannelFound.forEach(function(mention) {
-            const channelID = mention.replace(/<#(\d{1,}?)>/, '$1');
+            const channelID = mention.replace(/<#(\d+?)>/, '$1');
             const channelObject = discordClient.guilds.get(discordID).channels.get(channelID);
 
             const replaceRegex = new RegExp(mention, 'g');
@@ -181,9 +181,9 @@ function parseDiscordLine(line, discordID) {
 function parseIRCLine(line, discordID, channel) {
     line = line.replace(/\001ACTION(.*?)\001/g, '_$1_');
 
-    const mentionDiscordRegex = /(@.{1,}?\s)/g;
+    const mentionDiscordRegex = /(@.+?\s)/g;
     let mentionDiscordFound = line.match(mentionDiscordRegex);
-    const mentionIrcRegex = /(^.{1,}?:)/g;
+    const mentionIrcRegex = /(^.+?:)/g;
     let mentionIrcFound = line.match(mentionIrcRegex);
 
     let mentionFound;
@@ -197,8 +197,8 @@ function parseIRCLine(line, discordID, channel) {
 
     if (mentionFound) {
         mentionFound.forEach(function(mention) {
-            const regexDiscordMention = /@(.{1,}?)\s/;
-            const regexIrcMention = /^(.{1,}?):/;
+            const regexDiscordMention = /@(.+?)\s/;
+            const regexIrcMention = /^(.+?):/;
 
             let userNickname;
 
