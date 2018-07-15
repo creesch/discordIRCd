@@ -94,7 +94,7 @@ function parseMessage(line) {
 // Make nicknames work for irc. 
 function ircNickname(discordDisplayName, botuser, discriminator) {
     const replaceRegex = /[^a-zA-Z0-9_\\[\]\{\}\^`\|]/g;
-    const shortenRegex = /_{1,}/g;
+    const shortenRegex = /_+/g;
 
     if (replaceRegex.test(discordDisplayName)) {
 
@@ -123,12 +123,12 @@ function parseDiscordLine(line, discordID) {
     line = line.replace(/\x0F{2,}/g, '\x0F');
 
     // Now let's replace mentions with names we can recognize. 
-    const mentionUserRegex = /(<@!?\d{1,}?>)/g;
+    const mentionUserRegex = /(<@!?\d+?>)/g;
     const mentionUserFound = line.match(mentionUserRegex);
 
     if (mentionUserFound) {
         mentionUserFound.forEach(function(mention) {
-            const userID = mention.replace(/<@!?(\d{1,}?)>/, '$1');
+            const userID = mention.replace(/<@!?(\d+?)>/, '$1');
             const memberObject = discordClient.guilds.get(discordID).members.get(userID);
             const displayName = memberObject.displayName;
             const isBot = memberObject.user.bot;
@@ -143,11 +143,11 @@ function parseDiscordLine(line, discordID) {
     }
 
     // Now let's do this again and replace mentions with roles we can recognize. 
-    const mentionRoleRegex = /(<@&\d{1,}?>)/g;
+    const mentionRoleRegex = /(<@&\d+?>)/g;
     const mentionRoleFound = line.match(mentionRoleRegex);
     if (mentionRoleFound) {
         mentionRoleFound.forEach(function(mention) {
-            const roleID = mention.replace(/<@&(\d{1,}?)>/, '$1');
+            const roleID = mention.replace(/<@&(\d+?)>/, '$1');
             const roleObject = discordClient.guilds.get(discordID).roles.get(roleID);
 
             const replaceRegex = new RegExp(mention, 'g');
@@ -159,17 +159,17 @@ function parseDiscordLine(line, discordID) {
     }
 
     // Channels are also a thing!. 
-    const mentionChannelRegex = /(<#\d{1,}?>)/g;
+    const mentionChannelRegex = /(<#\d+?>)/g;
     const mentionChannelFound = line.match(mentionChannelRegex);
     if (mentionChannelFound) {
         mentionChannelFound.forEach(function(mention) {
-            const channelID = mention.replace(/<#(\d{1,}?)>/, '$1');
+            const channelID = mention.replace(/<#(\d+?)>/, '$1');
             const channelObject = discordClient.guilds.get(discordID).channels.get(channelID);
 
             const replaceRegex = new RegExp(mention, 'g');
             if (channelObject) {
                 const name = channelObject.name;
-                line = line.replace(replaceRegex, `@${name}`);
+                line = line.replace(replaceRegex, `#${name}`);
             }
         });
     }
@@ -181,32 +181,12 @@ function parseDiscordLine(line, discordID) {
 function parseIRCLine(line, discordID, channel) {
     line = line.replace(/\001ACTION(.*?)\001/g, '_$1_');
 
-    const mentionDiscordRegex = /(@.{1,}?\s)/g;
-    let mentionDiscordFound = line.match(mentionDiscordRegex);
-    const mentionIrcRegex = /(^.{1,}?:)/g;
-    let mentionIrcFound = line.match(mentionIrcRegex);
-
-    let mentionFound;
-    if (mentionDiscordFound && mentionIrcFound) {
-        mentionFound = mentionDiscordFound.concat(mentionIrcFound);
-    } else if (mentionDiscordFound) {
-        mentionFound = mentionDiscordFound;
-    } else {
-        mentionFound = mentionIrcFound;
-    }
-
-    if (mentionFound) {
-        mentionFound.forEach(function(mention) {
-            const regexDiscordMention = /@(.{1,}?)\s/;
-            const regexIrcMention = /^(.{1,}?):/;
-
-            let userNickname;
-
-            if (regexDiscordMention.mention) {
-                userNickname = mention.replace(regexDiscordMention, '$1');
-            } else {
-                userNickname = mention.replace(regexIrcMention, '$1');
-            }
+    // Discord-style username mentions (@User)
+    const mentionDiscordRegex = /(@.+?\s)/g;
+    const mentionDiscordFound = line.match(mentionDiscordRegex);
+    if (mentionDiscordFound) {
+        mentionDiscordFound.forEach(function(mention) {
+            const userNickname = mention.replace(/@(.+?)\s/, '$1');
 
             if (ircDetails[discordID].channels[channel].members.hasOwnProperty(userNickname)) {
                 const userID = ircDetails[discordID].channels[channel].members[userNickname].id;
@@ -216,6 +196,39 @@ function parseIRCLine(line, discordID, channel) {
             }
         });
     }
+
+    // IRC-style username mentions (User: at the start of the line)
+    const mentionIrcRegex = /(^.+?:)/g;
+    const mentionIrcFound = line.match(mentionIrcRegex);
+    if (mentionIrcFound) {
+        mentionIrcFound.forEach(function(mention) {
+            const userNickname = mention.replace(/^(.+?):/, '$1');
+
+            if (ircDetails[discordID].channels[channel].members.hasOwnProperty(userNickname)) {
+                const userID = ircDetails[discordID].channels[channel].members[userNickname].id;
+                const replaceRegex = new RegExp(mention, 'g');
+
+                line = line.replace(replaceRegex, `<@!${userID}>`);
+            }
+        });
+    }
+
+    // Channel names
+    const mentionChannelRegex = /(#.+?\s)/g;
+    const mentionChannelFound = line.match(mentionChannelRegex);
+    if (mentionChannelFound) {
+        mentionChannelFound.forEach(function(mention) {
+            const channelName = mention.replace(/#(.+?)\s/, '$1');
+
+            if (ircDetails[discordID].channels.hasOwnProperty(channelName)) {
+                const userID = ircDetails[discordID].channels[channelName].id;
+                const replaceRegex = new RegExp(mention, 'g');
+
+                line = line.replace(replaceRegex, `<#${userID}> `);
+            }
+        });
+    }
+
     return line;
 }
 
@@ -845,7 +858,7 @@ discordClient.on('message', function(msg) {
                         if (memberMentioned || memberDirectlyMentioned) {
                             ircClients.forEach(function(socket) {
                                 if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[channelName].joined.indexOf(socket.ircid) === -1) {
-                                    const message = `:discordIRCd!notReallyA@User PRIVMSG discordIRCd :#${channelName}: ${lineToSend}\r\n`;
+                                    const message = `:discordIRCd!notReallyA@User PRIVMSG discordIRCd :#${channelName}: <${authorDisplayName}> ${lineToSend}\r\n`;
                                     sendToIRC(discordServerId, message, socket.ircid);
                                 }
                             });
@@ -966,12 +979,12 @@ function joinCommand(channel, discordID, socketID) {
                     ircNick: displayMember,
                     id: member.id
                 };
-                const membersPlusDisplayMember = `${members} ${displayMember}`;
-                const newLineLenght = membersPlusDisplayMember.length;
-                const combinedLineLength = newLineLenght + memberlistTemplateLength;
+                const membersPlusDisplayMember = members ? `${members} ${displayMember}` : displayMember
+                const newLineLength = membersPlusDisplayMember.length;
+                const combinedLineLength = newLineLength + memberlistTemplateLength;
 
                 if (combinedLineLength < maxLineLength) {
-                    members = `${members} ${displayMember}`;
+                    members = membersPlusDisplayMember;
                 } else {
                     memberListLines.push(members);
                     members = displayMember;
