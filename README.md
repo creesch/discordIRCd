@@ -33,7 +33,7 @@ It also has been tested somewhat with Hexchat.
 ### Sending and receiving private messages. 
 Discord doesn't send private messages based on the server. In order to work around that discordIRCd provides an extra server that is soley used for sending and receiving private messages. To join it it use the server password `DMserver`. 
 
-Private conversation can be iniated from any server but will be automatically taken up by the private message server. 
+Private conversations can be initiated from any server but will be automatically taken up by the private message server. 
 
 ## Features
 
