@@ -7,6 +7,9 @@ global.configuration = {
       keyPath: '/path/to/key.pem',
       certPath: '/path/to/cert.pem'
     },
+    discord: {
+      messageLimit: 20
+    },
     handleCode: true, 
     githubToken: '<TOKEN>',
     ircServer: {

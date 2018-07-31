@@ -1050,7 +1050,33 @@ function joinCommand(channel, discordID, socketID) {
             }
         }
 
-
+        // If the amount of messages to be fetched after joining is set to 0,
+        // then we just exit the function here. Nothing, besides fetching the
+        // messages, happens after here, so it's okay
+        const messageLimit = configuration.discord.messageLimit;
+        if (messageLimit === 0) return;
+        
+        // Fetch the last n Messages
+        channelContent.fetchMessages({limit: messageLimit}).then((messages) => {
+            console.log(`Fetched messages for "${channel}"`);
+            // For some reason the messages are not ordered. So we need to sort
+            // them by creation date before we do anything.
+            messages.array().sort((msgA, msgB) => {
+                return msgA.createdAt - msgB.createdAt;
+            }).forEach((msg) => {
+                // We check if the message we're about to send has more than 1 line.
+                // If it does, then we need to send them one by one. Otherwise the client
+                // will try to interpret them as commands.
+                const lines = msg.cleanContent.split(/\r?\n/);
+                if (lines.length > 1) {
+                    for (let i = 0; i < lines.length; i++) {
+                        sendToIRC(discordID, `:${configuration.ircServer.hostname} PRIVMSG #${channel} ${msg.author.username} :${lines[i]}\r\n`, socketID);
+                    }
+                } else {
+                    sendToIRC(discordID, `:${configuration.ircServer.hostname} PRIVMSG #${channel} ${msg.author.username} :${msg.cleanContent}\r\n`, socketID);
+                }
+            });
+        });
 
     } else {
         sendToIRC(discordID, `:${configuration.ircServer.hostname} 473 ${nickname} #${channel} :Cannot join channel\r\n`, socketID);
