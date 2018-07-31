@@ -1050,8 +1050,9 @@ function joinCommand(channel, discordID, socketID) {
                 // will try to interpret them as commands.
                 const lines = msg.cleanContent.split(/\r?\n/);
                 if (lines.length > 1) {
-                    for (let i = 0; i < lines.length; i++)
+                    for (let i = 0; i < lines.length; i++) {
                         sendToIRC(discordID, `:${configuration.ircServer.hostname} PRIVMSG #${channel} ${msg.author.username} :${lines[i]}\r\n`, socketID);
+                    }
                 } else {
                     sendToIRC(discordID, `:${configuration.ircServer.hostname} PRIVMSG #${channel} ${msg.author.username} :${msg.cleanContent}\r\n`, socketID);
                 }
