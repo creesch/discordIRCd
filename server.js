@@ -1051,7 +1051,7 @@ function joinCommand(channel, discordID, socketID) {
                 const lines = msg.cleanContent.split(/\r?\n/);
                 if (lines.length > 1) {
                     for (let i = 0; i < lines.length; i++)
-                     sendToIRC(discordID, `:${configuration.ircServer.hostname} PRIVMSG #${channel} ${msg.author.username} :${lines[i]}\r\n`, socketID);
+                        sendToIRC(discordID, `:${configuration.ircServer.hostname} PRIVMSG #${channel} ${msg.author.username} :${lines[i]}\r\n`, socketID);
                 } else {
                     sendToIRC(discordID, `:${configuration.ircServer.hostname} PRIVMSG #${channel} ${msg.author.username} :${msg.cleanContent}\r\n`, socketID);
                 }
