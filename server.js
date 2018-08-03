@@ -116,7 +116,7 @@ function parseDiscordLine(line, discordID) {
     // Discord markdown parsing the lazy way. Probably fails in a bunch of different ways but at least it is easy. 
     line = line.replace(/\*\*(.*?)\*\*/g, '\x02$1\x0F');
     line = line.replace(/\*(.*?)\*/g, '\x1D$1\x0F');
-    line = line.replace(/^_(.*?)\_/g, '\x01ACTION $1\x01');
+    line = line.replace(/^_(.*?)\_$/g, '\x01ACTION $1\x01');
     line = line.replace(/__(.*?)__/g, '\x1F$1\x0F');
 
     // With the above regex we might end up with to many end characters. This replaces the, 
