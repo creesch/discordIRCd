@@ -1,6 +1,15 @@
 #+TITLE: todo
 
 * Inbox
+** TODO Finish sub commands
+
+[[file:~/Repos/discordIRCd/src/services/irc.ts::switch%20(capSubCommand)%20{]]
+** TODO Add configuration stuff
+
+[[file:~/Repos/discordIRCd/src/services/irc.ts::this.socket.write(`:${configuration.ircServer.hostname}%20CAP%20${nickname}%20LS%20:away-notify\r\n`);]]
+** TODO Turn this into a decorator
+
+[[file:~/Repos/discordIRCd/src/services/irc.ts::if%20(!this.socket)%20return;]]
 ** TODO Start IRC server
 
 [[file:~/Repos/discordIRCd/src/discord.ts:://%20start%20IRC%20here]]

@@ -29,6 +29,7 @@
     "winston": "git+https://github.com/winstonjs/winston.git"
   },
   "devDependencies": {
+    "@types/node": "^11.13.0",
     "@types/winston": "^2.4.4"
   }
 }
