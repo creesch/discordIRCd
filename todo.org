@@ -1,0 +1,9 @@
+#+TITLE: todo
+
+* Inbox
+** TODO Start IRC server
+
+[[file:~/Repos/discordIRCd/src/discord.ts:://%20start%20IRC%20here]]
+** TODO Rewrite to completely functional
+
+[[file:~/Repos/discordIRCd/src/discord.ts:://%20Get%20guilds%20and%20their%20members]]
