@@ -1,7 +1,8 @@
 import * as net from "net";
 import { Logger } from "winston";
-import { promisify } from "util";
 import SocketEx from "../util/SocketEx";
+import { parseMessage } from "../util/parseMessage";
+import { NetOptions } from "../types";
 
 export class IRCServer {
     constructor(logger: Logger) {
