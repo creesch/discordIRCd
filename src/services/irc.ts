@@ -35,7 +35,7 @@ export class IRCServer {
 
         const dataArray = data.match(/.+/g);
         for (let line of dataArray) {
-            const parsedLine = this.parseMessage(line);
+            const parsedLine = parseMessage(line);
             if (parsedLine.command === "CAP" && parsedLine.params) {
                 const capSubCommand = parsedLine.params[0];
                 const nickname = this.nickname || "*";
