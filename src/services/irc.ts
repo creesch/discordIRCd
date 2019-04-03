@@ -1,6 +1,7 @@
 import * as net from "net";
 import { Logger } from "winston";
-import { Promise } from "bluebird";
+import { promisify } from "util";
+import SocketEx from "../util/SocketEx";
 
 export class IRCServer {
     constructor(logger: Logger) {
@@ -8,7 +9,7 @@ export class IRCServer {
     }
 
     private logger: Logger;
-    private socket?: net.Socket;
+    private socketEx?: SocketEx;
     private clientCount = 0;
     private discordId = "";
     private nickname = "";
@@ -18,14 +19,18 @@ export class IRCServer {
     private isAuthenticated = false;
     private awayNotify = false;
 
-    private onError(error: Error) {
+    private async onError(error: Error) {
         this.logger.error(error);
 
-        if (this.socket) this.socket.end();
+        if (this.socketEx) {
+            // The first two arguments for some reason aren't marked as optional in node's typings :(
+            // @ts-ignore
+            await this.socketEx.endPromise();
+        }
     }
 
-    private onData(data: any) {
-        if (!this.socket) return;
+    private async onData(data: any) {
+        if (!this.socketEx) return;
 
         const dataArray = data.match(/.+/g);
         for (let line of dataArray) {
@@ -37,9 +42,14 @@ export class IRCServer {
                 switch (capSubCommand) {
                     case "LS":
                         this.isCAPBlocked = true;
-                        this.socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} LS :away-notify\r\n`);
+                        await this.socketEx.writePromise(`:${configuration.ircServer.hostname} CAP ${nickname} LS :away-notify\r\n`);
+                        break;
+                    case "LIST":
+                        await this.socketEx.writePromise(`:${configuration.ircServer.hostname} CAP ${nickname} LIST :away-notify\r\n`);
                         break;
                     default:
+                        // We have no idea what we are dealing with. Inform the client.
+                        await this.socketEx.writePromise(`:${configuration.ircServer.hostname} 410 * ${capSubCommand} :Invalid CAP command\r\n`);
                         break;
                 }
             }
@@ -47,19 +57,20 @@ export class IRCServer {
     }
 
     private setEvents() {
-        if (!this.socket) {
+        if (!this.socketEx) {
+            // This is mostly here for
             throw new Error("No socket... What");
         }
 
-        this.socket.on("error", this.onError);
-        this.socket.on("data", this.onData);
+        this.socketEx.socket.on("error", this.onError);
+        this.socketEx.socket.on("data", this.onData);
     }
 
     public createServer(options: NetOptions) {
         return new Promise(resolve => {
             net.createServer(options, async socket => {
-                this.socket = socket;
-                resolve(this.socket);
+                this.socketEx = new SocketEx(socket);
+                resolve(this.socketEx);
             });
         });
     }
@@ -114,3 +125,4 @@ interface IrcMessage {
     sender?: string;
     error?: string;
 }
+
