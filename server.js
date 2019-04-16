@@ -1274,35 +1274,24 @@ let ircServer = net.createServer(netOptions, function(socket) {
                         // The username the ircclient gives must match with that in the configuration.
                         // If the username is correct and the discordId can be found we are in bussiness. 
                         if (username === configuration.ircServer.username || usernameAlternative === configuration.ircServer.username) {
-                            // Now we are connected let's change the nickname first to whatever it is on discord. 
+                            const guild = discordClient.guilds.get(socket.discordid);
 
-
-                            if (socket.discordid === 'DMserver') {
-                                const newuser = discordClient.user.username;
-                                const discriminator = discordClient.user.discriminator;
-                                const newNickname = ircNickname(newuser, false, discriminator);
-
-                                ircDetails[socket.discordid]['discordDisplayName'] = newuser;
-                                ircDetails[socket.discordid]['ircDisplayName'] = newNickname;
-                                socket.user = newuser;
-                                socket.nickname = newNickname;
-                                socket.authenticated = true;
-
-
-                                const connectArray = [
-                                    `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
-                                    `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
-                                    `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
-                                ];
-
-                                connectArray.forEach(function(line) {
-                                    socket.write(line);
-                                });
-
-                            } else if (discordClient.guilds.get(socket.discordid)) {
-                                // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
-                                discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
-                                    const newuser = guildMember.displayName;
+                            if (guild || socket.discordid === 'DMserver') {
+                                new Promise(resolve => {
+                                    if (socket.discordid === 'DMserver') {
+                                        resolve({
+                                            networkName: 'Discord-DM',
+                                            newuser: discordClient.user.username
+                                        });
+                                    } else {
+                                        guild.fetchMember(discordClient.user.id).then(member => {
+                                            resolve({
+                                                networkName: `Discord-${guild.name}`,
+                                                newuser: member.displayName
+                                            });
+                                        });
+                                    }
+                                }).then(({networkName, newuser}) => {
                                     const discriminator = discordClient.user.discriminator;
                                     const newNickname = ircNickname(newuser, false, discriminator);
 
@@ -1317,23 +1306,18 @@ let ircServer = net.createServer(netOptions, function(socket) {
 
                                     const connectArray = [
                                         `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
-                                        `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
+                                        `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the ${networkName} Internet Relay Chat Network ${newNickname}\r\n`,
                                         `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
                                     ];
 
                                     // If we are waiting on CAP negotiation we write the connection array to the socket and this will be processed once proper CAP END is received.
                                     if (socket.isCAPBlocked) {
                                         socket.connectArray = connectArray;
-
                                     } else {
                                         connectArray.forEach(function(line) {
                                             socket.write(line);
                                         });
                                     }
-
-
-
-
                                 });
                             } else {
                                 // Things are not working out, let's end this. 
