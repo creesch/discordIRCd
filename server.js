@@ -1307,7 +1307,9 @@ let ircServer = net.createServer(netOptions, function(socket) {
                                     const connectArray = [
                                         `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
                                         `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the ${networkName} Internet Relay Chat Network ${newNickname}\r\n`,
-                                        `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
+                                        `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`,
+                                        `:${configuration.ircServer.hostname} 375 ${newNickname} :- ${configuration.ircServer.hostname} Message of the day - \r\n`,
+                                        `:${configuration.ircServer.hostname} 376 ${newNickname} :End of /MOTD command.\r\n`
                                     ];
 
                                     // If we are waiting on CAP negotiation we write the connection array to the socket and this will be processed once proper CAP END is received.
