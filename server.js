@@ -104,7 +104,7 @@ function ircNickname(discordDisplayName, botuser, discriminator) {
         return botuser ? `${newDisplayname}[BOT]` : newDisplayname;
 
     } else {
-        return botuser ? `${discordDisplayName}[BOT]` : discordDisplayName;
+        return botuser ? `${discordDisplayName}[BOT]` : `${discordDisplayName}${discriminator}`;
     }
 
 
