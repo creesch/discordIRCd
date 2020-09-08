@@ -23,8 +23,13 @@
   "homepage": "https://github.com/creesch/discordIRCd#readme",
   "dependencies": {
     "bufferutil": "^3.0.0",
-    "discord.js": "^11.0.0",
+    "discord.js": "^11.4.2",
     "erlpack": "github:hammerandchisel/erlpack",
-    "request": "^2.81.0"
+    "request": "^2.81.0",
+    "winston": "git+https://github.com/winstonjs/winston.git"
+  },
+  "devDependencies": {
+    "@types/node": "^11.13.0",
+    "@types/winston": "^2.4.4"
   }
 }
