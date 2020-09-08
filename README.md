@@ -1,4 +1,4 @@
-# Contributions are very welcome! AKA Maintainer(s) needed. 
+# This project is dead, no longer maintained and if you use it you do so at your own risk
 
 This started out as a personal project when I had a lot of time on my hands a while ago. 
 There is still enough room for improvement and ~~I do plan on eventually expanding this and tackling most [issues](https://github.com/creesch/discordIRCd/issues),~~ (very unlikely to happen anytime soon) however since I made this my available free time has been rather limited so I very much do welcome contributions. I also no longer use this actively myself so I have no insights about how it works regarding the discord API. 
