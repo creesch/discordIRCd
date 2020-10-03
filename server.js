@@ -129,7 +129,7 @@ function parseDiscordLine(line, discordID) {
     if (mentionUserFound) {
         mentionUserFound.forEach(function(mention) {
             const userID = mention.replace(/<@!?(\d+?)>/, '$1');
-            const memberObject = discordClient.guilds.get(discordID).members.get(userID);
+            const memberObject = discordClient.guilds.cache.get(discordID).members.get(userID);
             const displayName = memberObject.displayName;
             const isBot = memberObject.user.bot;
             const discriminator = memberObject.user.discriminator;
@@ -148,7 +148,7 @@ function parseDiscordLine(line, discordID) {
     if (mentionRoleFound) {
         mentionRoleFound.forEach(function(mention) {
             const roleID = mention.replace(/<@&(\d+?)>/, '$1');
-            const roleObject = discordClient.guilds.get(discordID).roles.get(roleID);
+            const roleObject = discordClient.guilds.cache.get(discordID).roles.cache.get(roleID);
 
             const replaceRegex = new RegExp(mention, 'g');
             if (roleObject) {
@@ -164,7 +164,7 @@ function parseDiscordLine(line, discordID) {
     if (mentionChannelFound) {
         mentionChannelFound.forEach(function(mention) {
             const channelID = mention.replace(/<#(\d+?)>/, '$1');
-            const channelObject = discordClient.guilds.get(discordID).channels.get(channelID);
+            const channelObject = discordClient.guilds.cache.get(discordID).channels.get(channelID);
 
             const replaceRegex = new RegExp(mention, 'g');
             if (channelObject) {
@@ -280,9 +280,9 @@ discordClient.on('warn', function(info) {
 // Discord is ready. 
 discordClient.on('ready', function() {
     // This is probably not needed, but since sometimes things are weird with discord.
-    discordClient.guilds.array().forEach(function(guild) {
-        guild.fetchMembers();
-        guild.sync();
+    discordClient.guilds.cache.array().forEach(function(guild) {
+        guild.members.fetch();
+        // guild.sync();
     });
 
     console.log(`Logged in as ${discordClient.user.username}!`);
@@ -293,7 +293,7 @@ discordClient.on('ready', function() {
     if (discordFirstConnection) {
         discordFirstConnection = false;
 
-        discordClient.guilds.array().forEach(function(guild) {
+        discordClient.guilds.cache.array().forEach(function(guild) {
             const guildID = guild.id;
             if (!ircDetails.hasOwnProperty(guildID)) {
                 ircDetails[guildID] = {
@@ -303,14 +303,14 @@ discordClient.on('ready', function() {
                 };
             }
 
-            guild.members.array().forEach(function(member) {
+            guild.members.cache.array().forEach(function(member) {
                 const ircDisplayName = ircNickname(member.displayName, member.user.bot, member.user.discriminator);
                 ircDetails[guildID].members[ircDisplayName] = member.id;
             });
 
 
         });
-        discordClient.channels.array().forEach(function(channel) {
+        discordClient.channels.cache.array().forEach(function(channel) {
             // Of course only for channels. 
             if (channel.type === 'text') {
                 const guildID = channel.guild.id,
@@ -383,7 +383,7 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
             let channelID = channelDetails.id;
 
             //Let's check the discord channel. 
-            let discordMemberArray = discordClient.guilds.get(guildID).channels.get(channelID).members.array();
+            let discordMemberArray = discordClient.guilds.cache.get(guildID).channels.get(channelID).members.array();
             discordMemberArray.forEach(function(discordMember) {
                 if (guildMember.displayName === discordMember.displayName && (guildMember.presence.status !== 'offline' || configuration.showOfflineUsers)) {
                     isInDiscordChannel = true;
@@ -637,7 +637,7 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
         ircClients.forEach(function(socket) {
             if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[newChannel.name].joined.indexOf(socket.ircid) > -1) {
 
-                const topicMSG = `:noboyknows!orCares@whatever TOPIC #${newChannel.name} :${topic}\r\n`;
+                const topicMSG = `:nobodyknows!orCares@whatever TOPIC #${newChannel.name} :${topic}\r\n`;
 
                 sendToIRC(discordServerId, topicMSG, socket.ircid);
 
@@ -675,7 +675,7 @@ discordClient.on('message', function(msg) {
 
 
 
-        // Doesn't really matter socket we pick this from as long as it is connected to the discord server.
+        // Doesn't really matter what socket we pick this from as long as it is connected to the discord server.
         let ownNickname = getSocketDetails(ircDetails[discordServerId].channels[channelName].joined[0]).nickname;
 
         let messageContent = msg.content;
@@ -790,7 +790,7 @@ discordClient.on('message', function(msg) {
         let memberMentioned = false;
         let memberDirectlyMentioned = false;
 
-        const ownGuildMember = discordClient.guilds.get(discordServerId).members.get(discordClient.user.id);
+        const ownGuildMember = discordClient.guilds.cache.get(discordServerId).members.cache.get(discordClient.user.id);
 
         if (msg.mentions.roles.array().length > 0) {
             ownGuildMember.roles.array().forEach(function(role) {
@@ -954,7 +954,7 @@ function joinCommand(channel, discordID, socketID) {
 
     if (ircDetails[discordID].channels.hasOwnProperty(channel)) {
         const channelProperties = ircDetails[discordID].channels[channel];
-        const channelContent = discordClient.channels.get(channelProperties.id);
+        const channelContent = discordClient.channels.cache.get(channelProperties.id);
 
         ircDetails[discordID].channels[channel].joined.push(socketID);
         ircDetails[discordID].channels[channel]['members'] = {};
@@ -1057,7 +1057,7 @@ function joinCommand(channel, discordID, socketID) {
         if (messageLimit === 0) return;
         
         // Fetch the last n Messages
-        channelContent.fetchMessages({limit: messageLimit}).then((messages) => {
+        channelContent.messages.fetch({limit: messageLimit}).then((messages) => {
             console.log(`Fetched messages for "${channel}"`);
             // For some reason the messages are not ordered. So we need to sort
             // them by creation date before we do anything.
@@ -1087,14 +1087,14 @@ function joinCommand(channel, discordID, socketID) {
 function listCommand(discordID, ircID) {
     if (discordID === 'DMserver') return;
     const nickname = ircDetails[discordID].ircDisplayName;
-    const channels = discordClient.guilds.get(discordID).channels.array();
+    const channels = discordClient.guilds.cache.get(discordID).channels.cache.array();
     let listResponse = [`:${configuration.ircServer.hostname} 321 ${nickname} Channel :Users Name\r\n`];
 
     channels.forEach(function(channel) {
         if (channel.type === 'text') {
             const channelname = channel.name,
-                memberCount = channel.members.array().length,
-                channeltopic = channel.topic;
+                  memberCount = channel.members.array().length,
+                 channeltopic = channel.topic;
 
             const channelDetails = `:${configuration.ircServer.hostname} 322 ${nickname} #${channelname} ${memberCount} :${channeltopic}\r\n`;
             listResponse.push(channelDetails);
@@ -1145,7 +1145,7 @@ function getDiscordUserFromIRC(recipient, discordID) {
             }
         });
     } else {
-        discordClient.guilds.get(discordID).members.array().forEach(function(member) {
+        discordClient.guilds.cache.get(discordID).members.array().forEach(function(member) {
             const isBot = member.user.bot;
             const discriminator = member.user.discriminator;
             const displayMember = ircNickname(member.displayName, isBot, discriminator);
@@ -1299,9 +1299,9 @@ let ircServer = net.createServer(netOptions, function(socket) {
                                     socket.write(line);
                                 });
 
-                            } else if (discordClient.guilds.get(socket.discordid)) {
+                            } else if (discordClient.guilds.cache.get(socket.discordid)) {
                                 // I am fairly certain there must be a simpler way to find out... but I haven't found it yet.
-                                discordClient.guilds.get(socket.discordid).fetchMember(discordClient.user.id).then(function(guildMember) {
+                                discordClient.guilds.cache.get(socket.discordid).members.fetch(discordClient.user.id).then(function(guildMember) {
                                     const newuser = guildMember.displayName;
                                     const discriminator = discordClient.user.discriminator;
                                     const newNickname = ircNickname(newuser, false, discriminator);
@@ -1386,7 +1386,7 @@ let ircServer = net.createServer(netOptions, function(socket) {
                             }
 
                             ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
-                            discordClient.channels.get(ircDetails[socket.discordid].channels[channelName].id).sendMessage(sendLine);
+                            discordClient.channels.cache.get(ircDetails[socket.discordid].channels[channelName].id).send(sendLine);
                         } else if (recipient !== 'discordIRCd') {
                             const recipientUser = getDiscordUserFromIRC(recipient, socket.discordid);
                             const sendLine = parsedLine.params[1];
