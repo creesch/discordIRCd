@@ -16,7 +16,7 @@ if (configuration.tlsEnabled) {
     netOptions = {
         key: fs.readFileSync(configuration.tlsOptions.keyPath),
         cert: fs.readFileSync(configuration.tlsOptions.certPath)
-    }
+    };
 
 } else {
     net = require('net');
@@ -274,6 +274,11 @@ discordClient.on('warn', function(info) {
 
 // Discord is ready. 
 discordClient.on('ready', function() {
+
+    if (configuration.matchConnectedStatus) {
+        discordClient.user.setStatus('idle'); // set idle status, no clients are connected
+    }
+
     // This is probably not needed, but since sometimes things are weird with discord.
     discordClient.guilds.cache.array().forEach(function(guild) {
         guild.members.fetch();
@@ -308,16 +313,21 @@ discordClient.on('ready', function() {
             // Of course only for channels. 
             if (channel.type === 'text') {
                 const guildID = channel.guild.id,
-                    channelName = channel.name,
+                  channelName = channel.name,
                     channelID = channel.id,
-                    channelTopic = channel.topic || 'No topic';
-
+                 channelTopic = channel.topic || 'No topic',
+                  canSetTopic = false;
 
                 ircDetails[guildID].channels[channelName] = {
                     id: channelID,
                     joined: [],
-                    topic: channelTopic
+                    topic: channelTopic,
+                    canSetTopic: canSetTopic
                 };
+
+                // parse channels for topic editability
+                ircDetails[guildID].channels[channelName].canSetTopic = discordClient.guilds.cache.get(guildID).me.permissionsIn(channel.id).has('MANAGE_CHANNELS', true);
+                console.log(`channel: ${channel.name} - canSetTopic=${ircDetails[guildID].channels[channelName].canSetTopic}`);
             }
         });
 
@@ -360,7 +370,6 @@ function guildMemberNoMore(guildID, ircDisplayName, noMoreReason) {
     if (noMoreReason !== 'User gone offline') {
         delete ircDetails[guildID].members[ircDisplayName];
     }
-
 }
 
 function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
@@ -590,7 +599,8 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
                 id: newChannel.id,
                 members: {},
                 topic: newChannel.topic || 'No topic',
-                joined: []
+                joined: [],
+                canSetTopic: false
             };
 
             if (ircDetails[discordServerId].channels[oldChannel.name].joined.length > 0) {
@@ -620,21 +630,47 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
                 const topicMSG = `:nobodyknows!orCares@whatever TOPIC #${newChannel.name} :${topic}\r\n`;
 
                 sendToIRC(discordServerId, topicMSG, socket.ircid);
-
-
             }
         });
-
-
-
     }
+    //have perms changed?
+    if (oldChannel.permissionOverwrites != newChannel.permissionOverwrites) {
+        // skip check for bot user existence for now, do a resync anyway
+        const channels = discordClient.guilds.cache.get(oldChannel.guild.id).channels.cache.array();
+        channels.forEach(function(channel) {
+            if (channel.type === 'text') {
+                ircDetails[oldChannel.guild.id].channels[channel.name].canSetTopic = discordClient.guilds.cache.get(oldChannel.guild.id).me.permissionsIn(channel.id).has('MANAGE_CHANNELS', true);
+                console.log(`channel: ${channel.name} - canSetTopic=${ircDetails[oldChannel.guild.id].channels[channel.name].canSetTopic}`);
+            }
+        });
+        console.log('channel-specific permissions have changed!');
+    }
+});
 
+discordClient.on('roleUpdate', function(oldRole, newRole) {
+    const discordServerId = oldRole.guild.id;
+    console.log('role updated');
+    if(oldRole.permissions !== newRole.permissions) {
+        if(discordClient.guilds.cache.get(discordServerId).me.roles.has(oldRole.id)) {
+            console.log(`a role we're in now has different permissions!`);
+
+            // const nickname = ircDetails[discordID].ircDisplayName;
+            const channels = discordClient.guilds.cache.get(oldRole.guild.id).channels.cache.array();
+
+            channels.forEach(function(channel) {
+                if (channel.type === 'text') {
+                    // console.log(ircDetails[oldRole.guild.id].channels[channel.name].);
+                    ircDetails[oldRole.guild.id].channels[channel.name].canSetTopic = discordClient.guilds.cache.get(oldRole.guild.id).me.permissionsIn(channel.id).has('MANAGE_CHANNELS', true);
+                    // console.log(`channel: ${channel.name} - canSetTopic=${ircDetails[oldRole.guild.id].channels[channel.name].canSetTopic}`);
+                }
+            });
+        }
+    }
 });
 
 // Processing received messages 
 discordClient.on('message', function(msg) {
     if (ircClients.length > 0 && msg.channel.type === 'text') {
-
 
         const discordServerId = msg.guild.id;
 
@@ -939,7 +975,7 @@ function joinCommand(channel, discordID, socketID) {
                     ircNick: displayMember,
                     id: member.id
                 };
-                const membersPlusDisplayMember = members ? `${members} ${displayMember}` : displayMember
+                const membersPlusDisplayMember = members ? `${members} ${displayMember}` : displayMember;
                 const newLineLength = membersPlusDisplayMember.length;
                 const combinedLineLength = newLineLength + memberlistTemplateLength;
 
@@ -1091,12 +1127,12 @@ function partCommand(channel, discordID, ircID) {
 // List amount of users on current (Discord) guild/server
 function lusersCommand(discordID, ircID) {
     let guildSize = discordClient.guilds.cache.get(discordID).memberCount;
-    let offlineUserAmount = discordClient.guilds.cache.get(discordID).members.filter(member => member.presence.status === "offline").size;
-    let channelCount = discordClient.guilds.cache.get(discordID).channels.filter(c => c.type === "text").size;
+    let offlineUserAmount = discordClient.guilds.cache.get(discordID).members.cache.filter(member => member.presence.status === "offline").size;
+    let channelCount = discordClient.guilds.cache.get(discordID).channels.cache.filter(c => c.type === "text").size;
 
     sendToIRC(discordID, `:${configuration.ircServer.hostname} 251 ${configuration.ircServer.hostname} :There are ${guildSize} users and ${offlineUserAmount} invisible on 1 servers\r\n`, ircID);
     //sendToIRC(discordID, `:${configuration.ircServer.hostname} 252 ${configuration.ircServer.hostname} :1 operator(s) online\r\n`, ircID);
-    //TODO: find out how to do actual 252 check for users that have Administrator perms
+    //TODO: find out how to do actual 252 check for users that have the Administrator permission
     sendToIRC(discordID, `:${configuration.ircServer.hostname} 254 ${configuration.ircServer.hostname} :${channelCount} channels formed\r\n`, ircID);
 }
 
@@ -1278,6 +1314,10 @@ let ircServer = net.createServer(netOptions, function(socket) {
                                     socket.nickname = newNickname;
                                     socket.authenticated = true;
 
+                                    if (configuration.matchConnectedStatus) {
+                                        discordClient.user.setStatus('online'); // we're connected, set to Online, client is present
+                                    }
+
                                     //console.log(`:${configuration.ircServer.hostname} NOTICE Auth :*** Looking up your hostname...\r\n`);
 
                                     const connectArray = [
@@ -1300,7 +1340,7 @@ let ircServer = net.createServer(netOptions, function(socket) {
                                 });
                             } else {
                                 // Things are not working out, let's end this. 
-                                console.log(`${nickname}: Failed to connect to ${socket.discordid}`)
+                                console.log(`${nickname}: Failed to connect to ${socket.discordid}`);
                                 socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :Failed to connect to ${socket.discordid}. Did you forget to specify the server ID as a server pass?\r\n`);
                                 socket.end();
                             }
@@ -1390,6 +1430,91 @@ let ircServer = net.createServer(netOptions, function(socket) {
                     case 'LUSERS':
                         lusersCommand(socket.discordid, socket.ircid);
                         break;
+                    case 'TOPIC':
+                        switch(parsedLine.params.length) {
+                            case 0:
+                                break;
+                            case 1:
+                                let topicChannelLookup = parsedLine.params[0].substring(1);
+                                try {
+                                    const channelTopic = discordClient.channels.cache.get(ircDetails[socket.discordid].channels[topicChannelLookup].id).topic;
+                                        if(channelTopic === null) {//RPL_NOTOPIC (331)
+                                            let RPL_NOTOPIC = `:${configuration.ircServer.hostname} 331 ${socket.nickname} #${topicChannelLookup} :No topic is set.\r\n`;
+                                            sendToIRC(socket.discordid, RPL_NOTOPIC, socket.ircid);
+                                        } else { //RPL_TOPIC (332)
+                                            let RPL_TOPIC = `:${configuration.ircServer.hostname} 332 ${socket.nickname} #${topicChannelLookup} :${channelTopic}\r\n`;
+                                            sendToIRC(socket.discordid, RPL_TOPIC, socket.ircid);
+                                            const todayDate = new Date();
+                                            const seconds = todayDate.getTime() / 1000;
+                                            //RPL_TOPICWHOTIME (333)
+                                            const RPL_TOPICWHOTIME = `:${configuration.ircServer.hostname} 333 ${socket.nickname} #${topicChannelLookup } nobodyknows!orCares@whatever ${seconds}\r\n`;
+                                            sendToIRC(socket.discordid, RPL_TOPICWHOTIME, socket.ircid);
+                                        }
+                                    }
+                                    catch(e) {
+                                        if (e instanceof TypeError) {
+                                            console.log(e);
+                                            let RPL_NOSUCHCHANNEL = `:${configuration.ircServer.hostname} 403 ${socket.nickname} #${topicChannelLookup} :No such channel\r\n`;
+                                            sendToIRC(socket.discordid, RPL_NOSUCHCHANNEL, socket.ircid);
+                                        }
+                                    }
+                                    break;
+                                case 2:
+                                    let topicChannelSet = parsedLine.params[0].substring(1);
+                                    const newTopic = parsedLine.params[1];
+                                    console.log(`channel id: ${ircDetails[socket.discordid].channels[topicChannelSet].id}`);
+                                    if(ircDetails[socket.discordid].channels[topicChannelSet].canSetTopic) {
+                                    //if(discordClient.guilds.cache.get(socket.discordid).me.permissionsIn(ircDetails[socket.discordid].channels[topicChannelSet].id).has('MANAGE_CHANNELS', true)) {
+                                        discordClient.channels.cache.get(ircDetails[socket.discordid].channels[topicChannelSet].id).setTopic(`${newTopic}`);
+                                    } else  {
+                                        // ERR_CHANOPRIVSNEEDED (482)
+                                        console.log('No perms to set topic!');
+                                        let ERR_CHANOPRIVSNEEDED = `:${configuration.ircServer.hostname} 482 ${socket.nickname} #${topicChannelSet} :You're not channel operator (you lack the 'Manage Channel' permission for this channel)\r\n`;
+                                        sendToIRC(socket.discordid, ERR_CHANOPRIVSNEEDED, socket.ircid);
+                                    }
+                                    break;
+                                default:
+                                    let RPL_NOSUCHCHANNEL = `:${configuration.ircServer.hostname} 403 ${socket.nickname} #${topicChannelLookup} :No such channel\r\n`;
+                                    sendToIRC(socket.discordid, RPL_NOSUCHCHANNEL, socket.ircid);
+                                    break;
+                            }
+                            break;
+                    case 'MODE':
+                        switch(parsedLine.params.length) {
+                            case 0:
+                                let ERR_NEEDMOREPARAMS = `:${configuration.ircServer.hostname} 461 ${socket.nickname} ${parsedLine.command} :Not enough parameters\r\n`;
+                                sendToIRC(socket.discordid, ERR_NEEDMOREPARAMS, socket.ircid);
+                                break;
+                            case 1:
+                                let modeLookupChannel = parsedLine.params[0];
+                                //RPL_CHANNELMODEIS (324)
+                                //TODO: handle invalid channels, do a check on channel id? crashing now
+                                if(modeLookupChannel.startsWith('#')) {
+                                    modeLookupChannel = modeLookupChannel.substring(1);
+                                    if(ircDetails[socket.discordid].channels[modeLookupChannel].canSetTopic) {
+                                        let RPL_CHANNELMODEIS_TOPIC_ON = `:${configuration.ircServer.hostname} 324 ${socket.nickname} #${modeLookupChannel} :+cn\r\n`;
+                                        sendToIRC(socket.discordid, RPL_CHANNELMODEIS_TOPIC_ON, socket.ircid);
+                                    } else { // can't set topic
+                                        let RPL_CHANNELMODEIS_TOPIC_OFF = `:${configuration.ircServer.hostname} 324 ${socket.nickname} #${modeLookupChannel} :+cnt\r\n`;
+                                        sendToIRC(socket.discordid, RPL_CHANNELMODEIS_TOPIC_OFF, socket.ircid);
+                                    }
+                                    } else {//it's a user mode
+                                        let RPL_UMODEIS = `:${configuration.ircServer.hostname} 221 ${socket.nickname} :+\r\n`;
+                                        sendToIRC(socket.discordid, RPL_UMODEIS, socket.ircid);
+                                }
+                                    break;
+                                case 2:
+                                    let modeLookupChannelParam2 = parsedLine.params[0].substring(1);
+                                    if(parsedLine.params[1] == '+b') {
+                                        //RPL_ENDOFBANLIST (368)
+                                        // "<client> <channel> :End of channel ban list"
+                                        // static ban list just so it doesn't break things, WONTFIX
+                                        let RPL_ENDOFBANLIST = `:${configuration.ircServer.hostname} 368 ${socket.nickname} #${modeLookupChannelParam2} :End of channel ban list\r\n`;
+                                        sendToIRC(socket.discordid, RPL_ENDOFBANLIST, socket.ircid);
+                                    }
+                                    break;
+                                }
+                                break;
                     case 'WHOIS':
                         const whoisUser = parsedLine.params[0].trim();
                         const userID = ircDetails[socket.discordid].members[whoisUser];
@@ -1410,8 +1535,14 @@ let ircServer = net.createServer(netOptions, function(socket) {
     // When a client is ended we remove it from the list of clients. 
     socket.on('end', function() {
         ircClients.splice(ircClients.indexOf(socket), 1);
-    });
 
+        if (configuration.matchConnectedStatus) {
+            if(ircClients == 0) {
+                discordClient.user.setStatus('dnd'); // set status to DnD since no clients are connected
+            }
+        }
+
+    });
 });
 
 // Function for sending messages to the connect irc clients 
