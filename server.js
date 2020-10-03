@@ -1,11 +1,10 @@
-// When false nothing will be logged. 
 // Configuration goes here.
 require('./config.js');
 
+// When false nothing will be logged. 
 if (!configuration.DEBUG) {
     console.log = function() {};
 }
-
 
 const Discord = require("discord.js");
 const fs = require('fs');
@@ -28,8 +27,6 @@ let request;
 if (configuration.handleCode) {
     request = require('request');
 }
-
-
 
 
 //
@@ -106,8 +103,6 @@ function ircNickname(discordDisplayName, botuser, discriminator) {
     } else {
         return botuser ? `${discordDisplayName}[BOT]` : discordDisplayName;
     }
-
-
 }
 
 
@@ -119,7 +114,7 @@ function parseDiscordLine(line, discordID) {
     line = line.replace(/^_(.*?)\_$/g, '\x01ACTION $1\x01');
     line = line.replace(/__(.*?)__/g, '\x1F$1\x0F');
 
-    // With the above regex we might end up with to many end characters. This replaces the, 
+    // With the above regex we might end up with too many end characters. This replaces the, 
     line = line.replace(/\x0F{2,}/g, '\x0F');
 
     // Now let's replace mentions with names we can recognize. 
@@ -287,7 +282,6 @@ discordClient.on('ready', function() {
 
     console.log(`Logged in as ${discordClient.user.username}!`);
 
-
     // Lets grab some basic information we will need eventually. 
     // But only do so if this is the first time connecting. 
     if (discordFirstConnection) {
@@ -307,9 +301,9 @@ discordClient.on('ready', function() {
                 const ircDisplayName = ircNickname(member.displayName, member.user.bot, member.user.discriminator);
                 ircDetails[guildID].members[ircDisplayName] = member.id;
             });
-
-
         });
+
+
         discordClient.channels.cache.array().forEach(function(channel) {
             // Of course only for channels. 
             if (channel.type === 'text') {
@@ -326,8 +320,6 @@ discordClient.on('ready', function() {
                 };
             }
         });
-
-
 
         // Now that is done we can start the irc server side of things. 
         ircServer.listen(configuration.ircServer.listenPort);
@@ -396,7 +388,6 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
                 isCurrentlyInIRC = true;
             }
 
-
             // If the user is in the discord channel but not irc we will add the user. 
             if (!isCurrentlyInIRC && isInDiscordChannel) {
                 ircDetails[guildID].channels[channel].members[ircDisplayName] = {
@@ -412,27 +403,22 @@ function guildMemberCheckChannels(guildID, ircDisplayName, guildMember) {
 
                     const socketDetails = getSocketDetails(socketID);
 
-
                     if (guildMember.presence === 'idle' && socketDetails.awayNotify) {
                         console.log(`User ${ircDisplayName} is away: Idle`);
                         sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Idle\r\n`, socketID);
-
                     }
 
                     if (guildMember.presence === 'dnd' && socketDetails.awayNotify) {
                         console.log(`User ${ircDisplayName} is away: Do not disturb`);
                         sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Do not disturb\r\n`, socketID);
-
-
                     }
+
                     // Unlikely to happen, but just to be sure.
                     if (guildMember.presence === 'offline' && configuration.showOfflineUsers && socketDetails.awayNotify) {
                         console.log(`User ${ircDisplayName} is offline`);
                         sendToIRC(guildID, `:${ircDisplayName}!${guildMember.id}@whatever AWAY :Offline\r\n`, socketID);
                     }
                 });
-
-
             }
 
             // If the user is currently in irc but not in the discord channel they have left the channel. 
@@ -455,7 +441,6 @@ function guildMemberNickChange(guildID, oldIrcDisplayName, newIrcDisplayName, ne
 
     ircDetails[guildID].members[newIrcDisplayName] = ircDetails[guildID].members[oldIrcDisplayName];
     delete ircDetails[guildID].members[oldIrcDisplayName];
-
 
     for (let channel in ircDetails[guildID].channels) {
         if (ircDetails[guildID].channels.hasOwnProperty(channel) && ircDetails[guildID].channels[channel].joined.length > 0) {
@@ -587,7 +572,6 @@ discordClient.on('channelDelete', function(deletedChannel) {
                 partCommand(deletedChannel.name, discordServerId, socketID);
             });
 
-
         }
 
         // Finally remove the channel from the list. 
@@ -619,8 +603,6 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
                     partCommand(oldChannel.name, discordServerId, socketID);
                     joinCommand(newChannel.name, discordServerId, socketID);
                 });
-
-
             }
 
             // Delete the old one.
@@ -631,8 +613,6 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
     // Simple topic change. 
     if (oldChannel.topic !== newChannel.topic) {
         const topic = newChannel.topic || 'No topic';
-
-
 
         ircClients.forEach(function(socket) {
             if (socket.discordid === discordServerId && ircDetails[discordServerId].channels[newChannel.name].joined.indexOf(socket.ircid) > -1) {
@@ -651,7 +631,6 @@ discordClient.on('channelUpdate', function(oldChannel, newChannel) {
 
 });
 
-
 // Processing received messages 
 discordClient.on('message', function(msg) {
     if (ircClients.length > 0 && msg.channel.type === 'text') {
@@ -667,13 +646,11 @@ discordClient.on('message', function(msg) {
         } else {
             authorDisplayName = msg.author.username;
         }
+
         const isBot = msg.author.bot;
         const discriminator = msg.author.discriminator;
         const authorIrcName = ircNickname(authorDisplayName, isBot, discriminator);
         const channelName = msg.channel.name;
-
-
-
 
         // Doesn't really matter what socket we pick this from as long as it is connected to the discord server.
         let ownNickname = getSocketDetails(ircDetails[discordServerId].channels[channelName].joined[0]).nickname;
@@ -693,7 +670,6 @@ discordClient.on('message', function(msg) {
                 let language;
                 if (codeDetails[1]) {
                     language = codeDetails[1].toLowerCase();
-
 
                     switch (language) {
                         case 'javascript':
@@ -735,19 +711,16 @@ discordClient.on('message', function(msg) {
                 const gistFileName = `${authorIrcName}_code.${extension}`;
 
                 let postBody = {
-                        description: `Code block on ${msg.guild.name} in channel ${channelName} from ${authorIrcName}`,
-                        public: false,
-                        files: {
-                            }
-                    };
-                
+                    description: `Code block on ${msg.guild.name} in channel ${channelName} from ${authorIrcName}`,
+                    public: false,
+                    files: {
+                    }
+                };
+
                 postBody.files[gistFileName] = {
                     'content': codeDetails[2]
                 };
 
-
-
-                
                 let gistOptions = {
                     url: 'https://api.github.com/gists',
                     headers: {
@@ -757,11 +730,6 @@ discordClient.on('message', function(msg) {
                     method: 'POST',
                     json: postBody
                 };
-                
-
-
-
-
 
                 request(gistOptions, function(error, response, body) {
 
@@ -781,9 +749,6 @@ discordClient.on('message', function(msg) {
                         console.log('Something went wrong on the gist side of things:', response.statusCode);
                     }
                 });
-
-
-
             }
         }
 
@@ -831,8 +796,6 @@ discordClient.on('message', function(msg) {
                     messageArray.push(attachmentLine);
                 });
             }
-
-
 
             messageArray.forEach(function(line) {
 
@@ -960,9 +923,6 @@ function joinCommand(channel, discordID, socketID) {
         ircDetails[discordID].channels[channel]['members'] = {};
         const channelTopic = channelProperties.topic;
 
-
-
-
         channelContent.members.array().forEach(function(member) {
             const isBot = member.user.bot;
             const discriminator = member.user.discriminator;
@@ -995,7 +955,6 @@ function joinCommand(channel, discordID, socketID) {
 
         memberListLines.push(members);
 
-
         const joinMSG = `:${nickname} JOIN #${channel}\r\n`;
         console.log(joinMSG);
         sendToIRC(discordID, joinMSG, socketID);
@@ -1016,11 +975,9 @@ function joinCommand(channel, discordID, socketID) {
             sendToIRC(discordID, memberListMSG, socketID);
         });
 
-
-        const endListMSG = `:${configuration.ircServer.hostname} 366 ${nickname} #${channel} :End of /NAMES list.\r\n`;
-        console.log(endListMSG);
-        sendToIRC(discordID, endListMSG, socketID);
-
+        const RPL_ENDOFNAMES = `:${configuration.ircServer.hostname} 366 ${nickname} #${channel} :End of /NAMES list.\r\n`;
+        console.log(RPL_ENDOFNAMES);
+        sendToIRC(discordID, RPL_ENDOFNAMES, socketID);
 
         const socketDetails = getSocketDetails(socketID);
 
@@ -1044,7 +1001,6 @@ function joinCommand(channel, discordID, socketID) {
                             }
 
                             break;
-
                     }
                 }
             }
@@ -1055,7 +1011,7 @@ function joinCommand(channel, discordID, socketID) {
         // messages, happens after here, so it's okay
         const messageLimit = configuration.discord.messageLimit;
         if (messageLimit === 0) return;
-        
+
         // Fetch the last n Messages
         channelContent.messages.fetch({limit: messageLimit}).then((messages) => {
             console.log(`Fetched messages for "${channel}"`);
@@ -1079,7 +1035,8 @@ function joinCommand(channel, discordID, socketID) {
         });
 
     } else {
-        sendToIRC(discordID, `:${configuration.ircServer.hostname} 473 ${nickname} #${channel} :Cannot join channel\r\n`, socketID);
+        const ERR_INVITEONLYCHAN = `:${configuration.ircServer.hostname} 473 ${nickname} #${channel} :Cannot join channel\r\n`;
+        sendToIRC(discordID, ERR_INVITEONLYCHAN, socketID);
     }
 }
 
@@ -1088,7 +1045,7 @@ function listCommand(discordID, ircID) {
     if (discordID === 'DMserver') return;
     const nickname = ircDetails[discordID].ircDisplayName;
     const channels = discordClient.guilds.cache.get(discordID).channels.cache.array();
-    let listResponse = [`:${configuration.ircServer.hostname} 321 ${nickname} Channel :Users Name\r\n`];
+    let listResponse = [`:${configuration.ircServer.hostname} 321 ${nickname} Channel :Users Name\r\n`]; //RPL_LISTSTART
 
     channels.forEach(function(channel) {
         if (channel.type === 'text') {
@@ -1096,7 +1053,7 @@ function listCommand(discordID, ircID) {
                   memberCount = channel.members.array().length,
                  channeltopic = channel.topic;
 
-            const channelDetails = `:${configuration.ircServer.hostname} 322 ${nickname} #${channelname} ${memberCount} :${channeltopic}\r\n`;
+            const channelDetails = `:${configuration.ircServer.hostname} 322 ${nickname} #${channelname} ${memberCount} :${channeltopic}\r\n`; //RPL_LIST (322)
             listResponse.push(channelDetails);
         }
     });
@@ -1129,6 +1086,18 @@ function partCommand(channel, discordID, ircID) {
 
         sendToIRC(discordID, `:${nickname}!${discordClient.user.id}@whatever PART #${channel}\r\n`, ircID);
     }
+}
+
+// List amount of users on current (Discord) guild/server
+function lusersCommand(discordID, ircID) {
+    let guildSize = discordClient.guilds.cache.get(discordID).memberCount;
+    let offlineUserAmount = discordClient.guilds.cache.get(discordID).members.filter(member => member.presence.status === "offline").size;
+    let channelCount = discordClient.guilds.cache.get(discordID).channels.filter(c => c.type === "text").size;
+
+    sendToIRC(discordID, `:${configuration.ircServer.hostname} 251 ${configuration.ircServer.hostname} :There are ${guildSize} users and ${offlineUserAmount} invisible on 1 servers\r\n`, ircID);
+    //sendToIRC(discordID, `:${configuration.ircServer.hostname} 252 ${configuration.ircServer.hostname} :1 operator(s) online\r\n`, ircID);
+    //TODO: find out how to do actual 252 check for users that have Administrator perms
+    sendToIRC(discordID, `:${configuration.ircServer.hostname} 254 ${configuration.ircServer.hostname} :${channelCount} channels formed\r\n`, ircID);
 }
 
 function getDiscordUserFromIRC(recipient, discordID) {
@@ -1202,9 +1171,7 @@ let ircServer = net.createServer(netOptions, function(socket) {
                 switch (capSubCommand) {
                     case 'LS':
                         socket.isCAPBlocked = true;
-
                         socket.write(`:${configuration.ircServer.hostname} CAP ${nickname} LS :away-notify\r\n`);
-
                         break;
                     case 'LIST':
                         if (socket.awayNotify) {
@@ -1249,9 +1216,7 @@ let ircServer = net.createServer(netOptions, function(socket) {
                         // We have no idea what we are dealing with. Inform the client. 
                         socket.write(`:${configuration.ircServer.hostname} 410 * ${capSubCommand} :Invalid CAP command\r\n`);
                         break;
-
                 }
-
             }
 
             if (!socket.authenticated) {
@@ -1276,7 +1241,6 @@ let ircServer = net.createServer(netOptions, function(socket) {
                         if (username === configuration.ircServer.username || usernameAlternative === configuration.ircServer.username) {
                             // Now we are connected let's change the nickname first to whatever it is on discord. 
 
-
                             if (socket.discordid === 'DMserver') {
                                 const newuser = discordClient.user.username;
                                 const discriminator = discordClient.user.discriminator;
@@ -1288,11 +1252,12 @@ let ircServer = net.createServer(netOptions, function(socket) {
                                 socket.nickname = newNickname;
                                 socket.authenticated = true;
 
-
                                 const connectArray = [
                                     `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
-                                    `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
-                                    `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
+                                    `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the Discord_${discordClient.guild.name} Internet Relay Chat Network ${newNickname}\r\n`,
+                                    `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`,
+                                    `:${configuration.ircServer.hostname} 375 ${newNickname} :- ${configuration.ircServer.hostname} Message of the day - \r\n`,
+                                    `:${configuration.ircServer.hostname} 376 ${newNickname} :End of /MOTD command.\r\n`
                                 ];
 
                                 connectArray.forEach(function(line) {
@@ -1316,9 +1281,11 @@ let ircServer = net.createServer(netOptions, function(socket) {
                                     //console.log(`:${configuration.ircServer.hostname} NOTICE Auth :*** Looking up your hostname...\r\n`);
 
                                     const connectArray = [
-                                        `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
-                                        `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the fake Internet Relay Chat Network ${newNickname}\r\n`,
-                                        `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`
+                                    `:${nickname}!${discordClient.user.id}@whatever NICK ${newNickname}\r\n`,
+                                    `:${configuration.ircServer.hostname} 001 ${newNickname} :Welcome to the Discord_${discordClient.guilds.cache.get(socket.discordid).name.replace(/ /g,"-")} Internet Relay Chat Network ${newNickname}\r\n`,
+                                    `:${configuration.ircServer.hostname} 003 ${newNickname} :This server was created specifically for you\r\n`,
+                                    `:${configuration.ircServer.hostname} 375 ${newNickname} :- ${configuration.ircServer.hostname} Message of the day - \r\n`,
+                                    `:${configuration.ircServer.hostname} 376 ${newNickname} :End of /MOTD command.\r\n`
                                     ];
 
                                     // If we are waiting on CAP negotiation we write the connection array to the socket and this will be processed once proper CAP END is received.
@@ -1330,15 +1297,11 @@ let ircServer = net.createServer(netOptions, function(socket) {
                                             socket.write(line);
                                         });
                                     }
-
-
-
-
                                 });
                             } else {
                                 // Things are not working out, let's end this. 
                                 console.log(`${nickname}: Failed to connect to ${socket.discordid}`)
-                                socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :Failed to connect to ${socket.discordid}\r\n`);
+                                socket.write(`:${configuration.ircServer.hostname} 464 ${nickname} :Failed to connect to ${socket.discordid}. Did you forget to specify the server ID as a server pass?\r\n`);
                                 socket.end();
                             }
 
@@ -1349,15 +1312,13 @@ let ircServer = net.createServer(netOptions, function(socket) {
                             socket.end();
                         }
                         break;
+                    }
+
                 }
 
-            }
+                if (socket.authenticated && !socket.isCAPBlocked) {
 
-
-
-            if (socket.authenticated && !socket.isCAPBlocked) {
-
-                switch (parsedLine.command) {
+                    switch (parsedLine.command) {
                     case 'JOIN':
                         const joinChannels = parsedLine.params[0].split(',');
 
@@ -1390,7 +1351,7 @@ let ircServer = net.createServer(netOptions, function(socket) {
                         } else if (recipient !== 'discordIRCd') {
                             const recipientUser = getDiscordUserFromIRC(recipient, socket.discordid);
                             const sendLine = parsedLine.params[1];
-                            recipientUser.sendMessage(sendLine);
+                            recipientUser.send(sendLine);
 
                             ircDetails[socket.discordid].lastPRIVMSG.push(sendLine.trim());
                             if (ircDetails[socket.discordid].lastPRIVMSG.length > 3) {
@@ -1426,11 +1387,19 @@ let ircServer = net.createServer(netOptions, function(socket) {
                     case 'LIST':
                         listCommand(socket.discordid, socket.ircid);
                         break;
+                    case 'LUSERS':
+                        lusersCommand(socket.discordid, socket.ircid);
+                        break;
                     case 'WHOIS':
                         const whoisUser = parsedLine.params[0].trim();
                         const userID = ircDetails[socket.discordid].members[whoisUser];
                         break;
-
+                    default: //ERR_UNKNOWNCOMMAND (421)
+                        if(parsedLine.command != 'CAP') {//double-check again for CAP here just in case
+                            let ERR_UNKNOWNCOMMAND = `:${configuration.ircServer.hostname} 421 ${socket.nickname} ${parsedLine.command} :Unknown command (or not implemented yet)\r\n`;
+                            sendToIRC(socket.discordid, ERR_UNKNOWNCOMMAND, socket.ircid);
+                        }
+                        break;
                 }
             }
         });
