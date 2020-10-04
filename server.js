@@ -98,13 +98,13 @@ function ircNickname(discordDisplayName, botuser, discriminator) {
 
     if (replaceRegex.test(discordDisplayName)) {
 
-        let newDisplayname = `${discordDisplayName.replace(replaceRegex, '_')}${discriminator}`;
+        let newDisplayname = `${discordDisplayName.replace(replaceRegex, '_')}_${discriminator}`;
         newDisplayname = newDisplayname.replace(shortenRegex, '_');
 
         return botuser ? `${newDisplayname}[BOT]` : newDisplayname;
 
     } else {
-        return botuser ? `${discordDisplayName}[BOT]` : `${discordDisplayName}${discriminator}`;
+        return botuser ? `${discordDisplayName}[BOT]` : `${discordDisplayName}_${discriminator}`;
     }
 
 
